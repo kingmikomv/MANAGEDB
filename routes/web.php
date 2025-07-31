@@ -17,15 +17,15 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect()->route('login');
 });
 
-Auth::routes();
+Auth::routes(['register' => false]);
 
 
-Route::prefix('home')->controller(DashboardController::class)->group(function () {
+Route::prefix('home')->group(function () {
 
-    Route::get('/', 'index')->name('index.depan');
+    Route::get('/', [VpnController::class, 'index'])->name('index.depan');
     // Tambahkan route lain di sini
 });
 Route::prefix('/home/network')->controller(VpnController::class)->group(function () {
@@ -40,6 +40,12 @@ Route::prefix('/home/network')->controller(VpnController::class)->group(function
 
     Route::get('/masukmikrotik', 'masukmikrotik')->name('masukmikrotik');
     Route::get('/dashboardmikrotik', 'dashboardmikrotik')->name('dashboardmikrotik');
+    Route::get('/sync/{ipmikrotik}', 'sync')->name('sync');
+
+    Route::post('/tambaholt', 'tambaholt')->name('tambaholt');
+        Route::get('/hapusolt', 'hapusolt')->name('hapusolt');
+    Route::post('/updateolt', 'updateolt')->name('update.olt');
+
 
     Route::get('/monitoring/active-connection/traffic', 'getTrafficData')->name('mikrotik.traffic');
     Route::post('/monitoring/add-firewall-rule', 'addFirewallRule')->name('addFirewallRule');

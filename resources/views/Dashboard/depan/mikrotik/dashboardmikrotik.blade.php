@@ -9,13 +9,13 @@
     <div class="wrapper">
 
         <!-- Preloader -->
-        <x-preload />
+     
         <!-- Navbar -->
         <x-nav />
         <!-- /.navbar -->
 
         <!-- Main Sidebar Container -->
-        <x-sidebar :mikrotik="$mikrotik" />
+        <x-sidebar :mikrotik="$mikrotik" :olt="$olt"/>
 
         <!-- Content Wrapper. Contains page content -->
         <div class="content-wrapper">
@@ -76,6 +76,45 @@
                     </div>
 
                     <div class="row">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title">Down</h5>
+                                </div>
+                                <!-- /.card-header -->
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <a href="{{ route('sync', ['ipmikrotik' => $ipmikrotik]) }}"
+                                            class="btn btn-primary mb-3">Sync</a>
+                                        @if ($currentDownUsers)
+                                            <table class="table table-bordered">
+                                                <thead>
+                                                    <tr>
+                                                        <th>No</th>
+                                                        <th>Nama Akun</th>
+                                                        <th>Waktu DOWN</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @php $noo = 1; @endphp
+                                                    @foreach ($currentDownUsers as $user)
+                                                        <tr>
+                                                            <td>{{$noo++}}</td>
+                                                            <td>{{ $user['namaakun'] }}</td>
+
+                                                            <td>{{ $user['detected_at'] }}</td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        @else
+                                            <p>Semua akun aktif, Nyantaaaiii Bestiiihh </p>
+                                        @endif
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header">
@@ -151,32 +190,33 @@
                                 </div>
                                 <!-- /.card-header -->
                                 <div class="card-body">
-                                                                        <div class="table-responsive">
+                                    <div class="table-responsive">
 
-                                    <table id="myTable2" class="table table-bordered table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th>No</th>
-                                                <th>Client</th>
-                                                <th>Address</th>
-                                                <th>Uptime</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @php $no = 1; @endphp
-
-                                            @foreach ($response4 as $data => $d)
+                                        <table id="myTable2" class="table table-bordered table-hover">
+                                            <thead>
                                                 <tr>
-                                                    <td>{{ $no++ }}</td>
-                                                    <td>{{ $d['name'] }}</td>
-                                                    <td>{{ $d['address'] }}</td>
-                                                    <td data-order="{{ $d['uptime_sort'] }}">{{ $d['uptime'] }}</td>
-
+                                                    <th>No</th>
+                                                    <th>Client</th>
+                                                    <th>Address</th>
+                                                    <th>Uptime</th>
                                                 </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                                                        </div>
+                                            </thead>
+                                            <tbody>
+                                                @php $no = 1; @endphp
+
+                                                @foreach ($response4 as $data => $d)
+                                                    <tr>
+                                                        <td>{{ $no++ }}</td>
+                                                        <td>{{ $d['name'] }}</td>
+                                                        <td>{{ $d['address'] }}</td>
+                                                        <td data-order="{{ $d['uptime_sort'] }}">{{ $d['uptime'] }}
+                                                        </td>
+
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
 
                             </div>
@@ -314,6 +354,7 @@
                 }]
                 // Jangan pakai "order" di sini kalau data sudah diurutkan dari backend
             });
+            
 
 
             // Function to get query parameter from URL

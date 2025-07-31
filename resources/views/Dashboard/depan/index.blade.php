@@ -9,13 +9,13 @@
     <div class="wrapper">
 
         <!-- Preloader -->
-        <x-preload />
+        
         <!-- Navbar -->
         <x-nav />
         <!-- /.navbar -->
 
         <!-- Main Sidebar Container -->
-        <x-sidebar :mikrotik="$mikrotik"/>
+        <x-sidebar :mikrotik="$mikrotik" :olt="$olt"/>
 
         <!-- Content Wrapper. Contains page content -->
         <div class="content-wrapper">

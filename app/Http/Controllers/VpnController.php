@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
+use App\Models\OLT;
 use App\Models\Vpn;
 use RouterOS\Query;
+use App\Models\Akun;
 use RouterOS\Client;
 use App\Models\Mikrotik;
 use Illuminate\Http\Request;
@@ -17,8 +20,10 @@ class VpnController extends Controller
     {
         $data = Vpn::get();
         $mikrotik = Mikrotik::get();
+                $olts = OLT::all();
+        $olt = OLT::get();
 
-        return view('Dashboard.depan.vpn.index', compact('data', 'mikrotik'));
+        return view('Dashboard.depan.vpn.index', compact('data', 'mikrotik', 'olts', 'olt'));
     }
     public function uploadvpn(Request $req)
     {
@@ -405,11 +410,12 @@ class VpnController extends Controller
     {
         $ipmikrotik = $request->input('ipmikrotik');
         $mikrotik = Mikrotik::get();
-
+        $olt = OLT::get();
         // Ambil data MikroTik berdasarkan IP
         $data = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
         $datavpn = Vpn::where('ipaddress', $data->ipmikrotik)->first();
         $data = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
+        
 
         // Set 'portweb' dari input request atau data VPN (jika ada)
         $portweb = $request->input('portweb') ?? ($datavpn->portweb ?? null);
@@ -600,6 +606,54 @@ class VpnController extends Controller
         $activeUserCount = count($activeHotspotUsers);
 
 
+        $akunDb = Akun::where('site', $data->site)->get();
+        //dd($akunDb);
+        // 3. Ambil data PPP Active dari MikroTik
+        $query5 = (new Query('/ppp/active/print'));
+        $pppActive = $client->query($query5)->read();
+
+        $activeUsernames = collect($pppActive)->pluck('name')->toArray();
+
+        // 4. Load JSON dari public path
+        $filePath = public_path('ppp_down_users.json');
+
+        // Pastikan file ada dan valid
+        if (!file_exists($filePath)) {
+            file_put_contents($filePath, json_encode([]));
+        }
+
+        $json = file_get_contents($filePath);
+        $decoded = json_decode($json, true);
+        $downLog = is_array($decoded) ? $decoded : [];
+
+
+        $currentDownUsers = [];
+
+
+        if (!$akunDb->isEmpty()) {
+            foreach ($akunDb as $akun) {
+                $username = $akun->namaakun;
+
+                if (!in_array($username, $activeUsernames)) {
+                    if (!isset($downLog[$username])) {
+                        $downLog[$username] = Carbon::now('Asia/Jakarta')->format('Y-m-d H:i:s');
+                    }
+
+                    $currentDownUsers[] = [
+                        'namaakun' => $akun->namaakun,
+                        'detected_at' => $downLog[$username],
+                    ];
+                } else {
+                    unset($downLog[$username]);
+                }
+            }
+        }
+
+
+
+        // 5. Simpan file JSON di public
+        file_put_contents($filePath, json_encode($downLog, JSON_PRETTY_PRINT));
+
 
 
 
@@ -631,10 +685,51 @@ class VpnController extends Controller
             $username = $data->username;
 
             // Tampilkan dashboard dengan data yang relevan
-            return view('Dashboard.depan.mikrotik.dashboardmikrotik', compact('ipmikrotik', 'site', 'username', 'date', 'interfaces', 'version', 'model', 'ttuser', 'activeUserCount', 'mikrotik', 'response3', 'portweb', 'portapi', 'response4'));
+            return view('Dashboard.depan.mikrotik.dashboardmikrotik', compact('ipmikrotik', 'site', 'username', 'date', 'interfaces', 'version', 'model', 'ttuser', 'activeUserCount', 'mikrotik', 'response3', 'portweb', 'portapi', 'response4', 'currentDownUsers', 'olt'));
         } else {
             return back()->with('error', 'Data tidak ditemukan.');
         }
+    }
+
+    public function sync($ipmikrotik)
+    {
+        $mikrotik = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
+        $vpn = Vpn::where('ipaddress', $mikrotik->ipmikrotik)->first();
+
+        if (!$mikrotik) {
+            return redirect()->back()->with('error', 'Mikrotik tidak ditemukan.');
+        }
+
+        // Hubungkan ke API Mikrotik
+        $client = new Client([
+            'host' => env('MIKROTIK_CHOST'),
+            'user' => $mikrotik->username,
+            'pass' => $mikrotik->password,
+            'port' => $vpn->portapi,
+        ]);
+
+        // Ambil data PPP active dari Mikrotik
+        $query = new Query('/ppp/active/print');
+        $pppActive = $client->query($query)->read();
+
+        // Ambil semua akun yang sudah ada untuk mikrotik ini
+        $aakun = Akun::where('site', $mikrotik->site)->get();
+
+        // Loop data aktif, simpan jika belum ada
+        foreach ($pppActive as $item) {
+            $namaakun = $item['name'];
+
+            $sudahAda = $aakun->contains('namaakun', $namaakun);
+
+            if (!$sudahAda) {
+                Akun::create([
+                    'namaakun' => $namaakun,
+                    'site' => $mikrotik->site,
+                ]);
+            }
+        }
+
+        return redirect()->back()->with('success', 'Sinkronisasi berhasil.');
     }
 
     public function getUptime($ipmikrotik)
@@ -870,5 +965,176 @@ class VpnController extends Controller
             return response()->json(['error' => 'Gagal terhubung ke MikroTik: ' . $e->getMessage()], 500);
         }
     }
+    public function tambaholt(Request $req)
+    {
+        $ipolt = $req->input('ipolt');
+        $portolt = $req->input('portolt');
+        $site = $req->input('site');
+        $ipvpn = $req->input('ipvpn');
+        // Cari port yang tersedia dalam rentang 44001 - 44999
+        $usedPorts = OLT::pluck('portvpn')->toArray();
+        $availablePort = null;
 
+        for ($port = 44001; $port <= 44999; $port++) {
+            if (!in_array($port, $usedPorts)) {
+                $availablePort = $port;
+                break;
+            }
+        }
+
+        // Jika tidak ada port tersedia
+        if (!$availablePort) {
+            session()->flash('error', "Semua port antara 44001 dan 44999 telah terpakai.");
+            return redirect()->back();
+        }
+
+        $portvpn = $availablePort;
+
+
+        //dd($site, $ipolt ,$ipolt, $ipvpn, $portvpn);
+
+        try {
+            // Konfigurasi koneksi ke MikroTik
+            $client = new Client([
+                'host' => env('MIKROTIK_HOST'),
+                'user' => env('MIKROTIK_USER'),
+                'pass' => env('MIKROTIK_PASS'),
+            ]);
+
+            if (empty($ipolt) || empty($portolt) || empty($site) || empty($ipvpn)) {
+                session()->flash('error', "IP OLT, Port OLT, atau Site tidak boleh kosong.");
+                return redirect()->back();
+            }
+
+            // Mendapatkan data IP MikroTik berdasarkan site
+            $ipmikrotik = Vpn::where('ipaddress', $ipvpn)->first();
+
+            if (!$ipmikrotik) {
+                session()->flash('error', "IP VPN $ipvpn tidak ditemukan.");
+                return redirect()->back();
+            }
+
+
+            // Tentukan aturan NAT untuk IP OLT
+            $natQueryOLT = new Query('/ip/firewall/nat/add');
+            $natQueryOLT->equal('chain', 'dstnat')
+                ->equal('protocol', 'tcp')
+                ->equal('dst-port', $portvpn)
+                ->equal('dst-address-list', 'ip-public')
+                ->equal('action', 'dst-nat')
+                ->equal('to-addresses', $ipmikrotik->ipaddress)
+                ->equal('to-ports', $portvpn)
+                ->equal('comment', 'AQT_' . $site . '_OLT');
+
+            $natResponseOLT = $client->query($natQueryOLT)->read();
+
+            // Cek jika ada kesalahan dalam response NAT
+            if (isset($natResponseOLT['!trap'])) {
+                session()->flash('error', $natResponseOLT['!trap'][0]['message']);
+                return redirect()->back();
+            }
+
+            // Menyimpan data ke database
+            OLT::create([
+                'ipolt' => $ipolt,
+                'portolt' => $portolt, // Simpan dstPort yang baru di database
+                'ipvpn' => $ipvpn, // Simpan dstPort yang baru di database
+                'portvpn' => $portvpn, // Simpan dstPort yang baru di database
+
+                'site' => $site,
+            ]);
+
+            session()->flash('success', "Konfigurasi OLT Berhasil Ditambahkan !");
+            return redirect()->back();
+        } catch (ClientException $e) {
+            session()->flash('error', "Gagal terhubung ke MikroTik: " . $e->getMessage());
+            return redirect()->back();
+        } catch (\Exception $e) {
+            session()->flash('error', "Terjadi kesalahan: " . $e->getMessage());
+            return redirect()->back();
+        }
+    }
+
+     public function hapusolt($id)
+    {
+        try {
+            // Konfigurasi koneksi ke MikroTik
+            $client = new Client([
+                'host' => env('MIKROTIK_HOST'),
+                'user' => env('MIKROTIK_USER'),
+                'pass' => env('MIKROTIK_PASS'),
+            ]);
+
+            // Cari data OLT di database berdasarkan ID
+            $vpnData = OLT::find($id);
+
+            if (!$vpnData) {
+                session()->flash('error', "Data tidak ditemukan di database.");
+                return redirect()->back();
+            }
+
+            // Cari aturan NAT di MikroTik berdasarkan 'to-addresses' yang sesuai dengan ipolt
+            $findNatQuery = new Query('/ip/firewall/nat/print');
+            $findNatQuery->where('dst-port', $vpnData->portvpn);
+
+            $natRules = $client->query($findNatQuery)->read();
+
+            // Hapus aturan NAT jika ditemukan
+            if (!empty($natRules)) {
+                foreach ($natRules as $rule) {
+                    if (isset($rule['.id'])) {
+                        $deleteNatQuery = new Query('/ip/firewall/nat/remove');
+                        $deleteNatQuery->equal('.id', $rule['.id']);
+                        $client->query($deleteNatQuery)->read();
+                    }
+                }
+                session()->flash('success', "Aturan NAT di MikroTik berhasil dihapus.");
+            } else {
+                session()->flash('warning', "Aturan NAT tidak ditemukan di MikroTik.");
+            }
+
+            // Hapus data dari database
+            $vpnData->delete();
+
+            session()->flash('success', "Data berhasil dihapus dari database.");
+            return redirect()->back();
+        } catch (ClientException $e) {
+            session()->flash('error', "Gagal terhubung ke MikroTik: " . $e->getMessage());
+            return redirect()->back();
+        } catch (\Exception $e) {
+            session()->flash('error', "Terjadi kesalahan: " . $e->getMessage());
+            return redirect()->back();
+        }
+    }
+
+    public function updateolt(Request $request)
+    {
+        
+        // Validasi data
+        $request->validate([
+            'id' => 'required|exists:olt,id', // Pastikan ID ada di tabel olts
+            'site' => 'required|string|max:255',
+            'ipolt' => 'required|ip', // Validasi IP address
+            'portolt' => 'required|numeric',
+            'ipvpn' => 'required|ip', // Validasi IP VPN
+        ]);
+
+        try {
+            // Cari OLT berdasarkan ID
+            $olt = OLT::findOrFail($request->id);
+
+            // Update data OLT
+            $olt->site = $request->site;
+            $olt->ipolt = $request->ipolt;
+            $olt->portolt = $request->portolt;
+            $olt->ipvpn = $request->ipvpn;
+            $olt->save();
+
+            // Redirect dengan pesan sukses
+            return redirect()->back()->with('success', 'Data OLT berhasil diperbarui.');
+        } catch (\Exception $e) {
+            // Redirect dengan pesan error
+            return redirect()->back()->with('error', 'Terjadi kesalahan saat memperbarui data OLT: ' . $e->getMessage());
+        }
+    }
 }

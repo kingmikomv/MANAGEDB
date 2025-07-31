@@ -21,3 +21,23 @@
 <script src="{{asset('dist/js/pages/dashboard2.js')}}"></script>
   <script src="https://cdn.datatables.net/2.1.5/js/dataTables.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <script>
+    function confirmLogout(e) {
+        e.preventDefault();
+        Swal.fire({
+            title: 'Yakin ingin logout?',
+            text: "Kamu akan keluar dari sistem!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Ya, logout!',
+            cancelButtonText: 'Batal'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                document.getElementById('logout-form').submit();
+            }
+        });
+    }
+</script>

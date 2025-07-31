@@ -9,13 +9,13 @@
     <div class="wrapper">
 
         <!-- Preloader -->
-        <x-preload />
+       
         <!-- Navbar -->
         <x-nav />
         <!-- /.navbar -->
 
         <!-- Main Sidebar Container -->
-        <x-sidebar :mikrotik="$mikrotik"/>
+        <x-sidebar :mikrotik="$mikrotik" :olt="$olt"/>
 
         <!-- Content Wrapper. Contains page content -->
         <div class="content-wrapper">
@@ -99,7 +99,7 @@
                         </div>
                         <!-- /.col -->
 
-                        <div class="col-md-12">
+                        <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header">
                                     <h5 class="card-title">MikroTik</h5>
@@ -110,50 +110,126 @@
                                         data-target="#addMikrotikModal">
                                         <i class="fas fa-plus"></i> Tambah MikroTik
                                     </button>
-                                     <div class="table-responsive">
-                                    <table id="mikrotikTable" class="table table-striped">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>IP Mikrotik</th>
-                                                <th>Site</th>
-                                                <th>Username</th>
-                                                <th>Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @php $no = 1; @endphp
-                                            @foreach($mikrotik as $item)
-                                            <tr>
-                                                <td>{{ $no++ }}</td>
-                                                <td>{{ $item->ipmikrotik }}</td>
-                                                <td>{{ $item->site }}</td>
-                                                <td>{{ $item->username }}</td>
-                                                <td>
-                                                    <div class="dropdown">
-                                                        <button class="btn btn-primary dropdown-toggle" type="button" data-toggle="dropdown" aria-expanded="false">
-                                                            Action
-                                                        </button>
-                                                        <div class="dropdown-menu">
-                                                            <a class="dropdown-item" href="{{ route('vpn.aksesmikrotik', [
-                                                                'ipmikrotik' => $item->ipmikrotik,
-                                                                'username' => $item->username,
-                                                                'password' => $item->password
-                                                            ]) }}"><i class="fas fa-bolt"></i> Cek Akses</a>
-                                                            {{-- <a class="dropdown-item" href="{{ route('masukmikrotik', [
+                                    <div class="table-responsive">
+                                        <table id="mikrotikTable" class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>IP Mikrotik</th>
+                                                    <th>Site</th>
+                                                    <th>Username</th>
+                                                    <th>Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @php $no = 1; @endphp
+                                                @foreach ($mikrotik as $item)
+                                                    <tr>
+                                                        <td>{{ $no++ }}</td>
+                                                        <td>{{ $item->ipmikrotik }}</td>
+                                                        <td>{{ $item->site }}</td>
+                                                        <td>{{ $item->username }}</td>
+                                                        <td>
+                                                            <div class="dropdown">
+                                                                <button class="btn btn-primary dropdown-toggle"
+                                                                    type="button" data-toggle="dropdown"
+                                                                    aria-expanded="false">
+                                                                    Action
+                                                                </button>
+                                                                <div class="dropdown-menu">
+                                                                    <a class="dropdown-item"
+                                                                        href="{{ route('vpn.aksesmikrotik', [
+                                                                            'ipmikrotik' => $item->ipmikrotik,
+                                                                            'username' => $item->username,
+                                                                            'password' => $item->password,
+                                                                        ]) }}"><i
+                                                                            class="fas fa-bolt"></i> Cek Akses</a>
+                                                                    {{-- <a class="dropdown-item" href="{{ route('masukmikrotik', [
                                                                 'ipmikrotik' => $item->ipmikrotik,
                                                                 'portweb' => $item->portweb
                                                             ]) }}"><i class="fas fa-sign-in-alt"></i> Masuk</a> --}}
-                                                            <a class="dropdown-item editMikrotik" href="javascript:void(0)" data-id="{{ $item->id }}"><i class="fas fa-edit"></i> Edit</a>
-                                                            <a class="dropdown-item deleteMikrotik" href="javascript:void(0)" data-id="{{ $item->id }}"><i class="fas fa-trash"></i> Hapus</a>
+                                                                    <a class="dropdown-item editMikrotik"
+                                                                        href="javascript:void(0)"
+                                                                        data-id="{{ $item->id }}"><i
+                                                                            class="fas fa-edit"></i> Edit</a>
+                                                                    <a class="dropdown-item deleteMikrotik"
+                                                                        href="javascript:void(0)"
+                                                                        data-id="{{ $item->id }}"><i
+                                                                            class="fas fa-trash"></i> Hapus</a>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title">OLT</h5>
+                                </div>
+                                <!-- /.card-header -->
+                                <div class="card-body">
+                                   <button type="button" class="btn btn-primary" data-toggle="modal"
+                                    data-target="#addModalOlt">
+                                   <i class="fas fa-plus"></i> Tambah OLT
+                                </button>
+                                    <div class="table-responsive">
+ <table class="table mt-2" id="olttable">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">No</th>
+                                            <th scope="col">Nama OLT</th>
+                                            <th scope="col">IP OLT</th>
+                                            <th scope="col">PORT OLT</th>
+                                            <th scope="col">PORT VPN</th>
+                                        
+                                            <th scope="col">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @php $no = 1; @endphp
+                                        @foreach ($olts as $olt)
+                                            <tr>
+                                                <th scope="row">{{ $no++ }}</th>
+                                               
+                                                <td>{{ $olt->site }}</td>
+                                                <td>{{ $olt->ipolt }}</td>
+                                                <td>{{ $olt->portolt }}</td>
+                                                <td>{{ $olt->portvpn }}</td>
+                                               
+                                                
+                                                <td>
+                                                    <div class="dropdown">
+                                                        <button class="btn btn-primary dropdown-toggle" type="button"
+                                                            data-toggle="dropdown" aria-expanded="false">
+                                                            Action
+                                                        </button>
+                                                        <div class="dropdown-menu">
+                                                            <a class="dropdown-item" href="#"
+                                                                data-toggle="modal" data-target="#scriptModal"
+                                                                onclick="generateScript('{{ $olt->ipolt }}', '{{ $olt->portvpn }}', '{{ $olt->portolt }}')">
+                                                               <i class="fas fa-eye"></i> Lihat Script
+                                                            </a>
+                                                           
+                                                            <a class="dropdown-item" href="#" onclick="openEditModal('{{ $olt->id }}', '{{ $olt->site }}', '{{ $olt->ipolt }}', '{{ $olt->portolt }}', '{{ $olt->ipvpn }}')">
+                                                                <i class="fas fa-edit"></i> Edit
+                                                            </a>
+                                                                                                                        <a class="dropdown-item text-danger"
+                                                            href="{{ route('hapusolt', $olt->id) }}"><i class="fas fa-trash"></i> Hapus</a>
                                                         </div>
                                                     </div>
                                                 </td>
                                             </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                                    </div>
                                 </div>
 
                             </div>
@@ -285,7 +361,8 @@
                                     akan tampil interface VPN baru sesuai mode yang dipilih.</li>
                                 <li>Lihat status interface VPN, jika belum terhubung / Connected silahkan coba
                                     menggunakan mode yang lain. Jika sudah terhubung / connected (cirinya ada icon huruf
-                                    <b>R</b> di samping interface VPN).</li>
+                                    <b>R</b> di samping interface VPN).
+                                </li>
                                 <li>Gagal terhubung / Connected biasanya karna mode yang anda pilih di blok oleh ISP
                                     anda.</li>
                             </ol>
@@ -322,98 +399,228 @@
 
 
 
-                <!-- Edit MikroTik Modal -->
-                <div class="modal fade" id="editMikrotikModal" tabindex="-1" role="dialog" aria-labelledby="editMikrotikModalLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-lg" role="document">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="editMikrotikModalLabel">Edit MikroTik</h5>
-                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
+    <!-- Edit MikroTik Modal -->
+    <div class="modal fade" id="editMikrotikModal" tabindex="-1" role="dialog"
+        aria-labelledby="editMikrotikModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editMikrotikModalLabel">Edit MikroTik</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="editMikrotikForm" method="POST">
+                        @csrf
+                        <div class="form-group">
+                            <label for="edit_ipmikrotik">IP VPN / IP Public</label>
+                            <input type="text" class="form-control" id="edit_ipmikrotik" name="ipmikrotik"
+                                required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_site">Site / Nama Mikrotik</label>
+                            <input type="text" class="form-control" id="edit_site" name="site" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_username">Username</label>
+                            <input type="text" class="form-control" id="edit_username" name="username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_password">Password</label>
+                            <input type="password" class="form-control" id="edit_password" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Update Mikrotik</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Tambah Mikrotik -->
+    <div class="modal fade" id="addMikrotikModal" tabindex="-1" role="dialog"
+        aria-labelledby="addMikrotikModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addMikrotikModalLabel">Tambah Mikrotik</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="addMikrotikForm" action="{{ route('vpn.tambahmikrotik') }}" method="post">
+                        @csrf
+                        <div class="form-group">
+                            <label for="ipmikrotik">IP VPN / IP Public</label>
+                            <input type="text" class="form-control" placeholder="172.160.x.x" name="ipmikrotik"
+                                id="ipmikrotik" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="site">Site / Nama Mikrotik</label>
+                            <input type="text" class="form-control" placeholder="Site Indramayu" name="site"
+                                id="site" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="username">Username</label>
+                            <input type="text" class="form-control" placeholder="Username" name="username"
+                                required>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="password" class="form-control" placeholder="Password" name="password"
+                                required>
+                        </div>
+                        <button type="submit" class="btn btn-success">Tambah Mikrotik</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pemberitahuan -->
+    <div class="modal fade" id="notificationModal" tabindex="-1" role="dialog"
+        aria-labelledby="notificationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="notificationModalLabel">Pemberitahuan</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size: 20px;">Pada halaman ini berfungsi sebagai halaman penambahan mikrotik, entah
+                        itu dari Mikrotik yang sudah terhubung dengan VPN yang telah dibuat di halaman <a
+                            href="{{ route('vpn.index') }}">Data VPN</a> atau data mikrotik Anda yang sudah memiliki
+                        IP Public sendiri.</p>
+                    <hr>
+                    <p class="mb-0" style="font-size: 20px;">Jika Router MikroTik Anda tidak mempunyai IP Public,
+                        silakan buat akun <a href="{{ route('vpn.index') }}">VPN</a> pada form yang sudah disiapkan.
+                        Gratis tanpa biaya tambahan dan boleh lebih dari satu.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <div class="modal fade" id="addModalOlt" tabindex="-1" role="dialog" aria-labelledby="addVpnModalLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addVpnModalLabel">Tambah OLT</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <form id="vpnForm" action="{{ route('tambaholt') }}" method="post">
+                        @csrf
+                        <div class="modal-body">
+
+                            <div class="form-group">
+                                <label for="namaAkun">Nama OLT</label>
+                                <input type="text" class="form-control" placeholder="Nama Akun" name="site"
+                                    id="namaAkunInput">
                             </div>
-                            <div class="modal-body">
-                                <form id="editMikrotikForm" method="POST">
-                                    @csrf
-                                    <div class="form-group">
-                                        <label for="edit_ipmikrotik">IP VPN / IP Public</label>
-                                        <input type="text" class="form-control" id="edit_ipmikrotik" name="ipmikrotik" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="edit_site">Site / Nama Mikrotik</label>
-                                        <input type="text" class="form-control" id="edit_site" name="site" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="edit_username">Username</label>
-                                        <input type="text" class="form-control" id="edit_username" name="username" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="edit_password">Password</label>
-                                        <input type="password" class="form-control" id="edit_password" name="password" required>
-                                    </div>
-                                    <button type="submit" class="btn btn-primary">Update Mikrotik</button>
-                                </form>
+
+                            <div class="form-group">
+                                <label for="username">IP OLT</label>
+                                <input type="text" class="form-control"
+                                    placeholder="IP OLT (Cth. 192.168.xxx.xxx)" name="ipolt">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="password">Port OLT</label>
+                                <input type="text" class="form-control" placeholder="Port OLT (Cth. 80, 8080)"
+                                    name="portolt">
+                            </div>
+                            <div class="form-group">
+                                    <label for="password">IP Address VPN</label>
+                                    <input type="text" class="form-control" placeholder="IP Address VPN"
+                                        name="ipvpn">
+                            </div>
+                           
+
+                        </div>
+                        <div class="modal-footer">
+                            <input type="submit" class="btn btn-primary" value="Buat VPN">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="modal fade" id="editOltModal" tabindex="-1" aria-labelledby="editOltModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form id="editOltForm" action="{{ route('update.olt') }}" method="POST">
+                        @csrf
+                        @method('PUT')
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editOltModalLabel">Edit Data OLT</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>                        </div>
+                        <div class="modal-body">
+                            <!-- Hidden input for OLT ID -->
+                            <input type="hidden" name="id" id="oltIdInput">
+        
+                            <div class="form-group">
+                                <label for="namaAkun">Nama OLT</label>
+                                <input type="text" class="form-control" placeholder="Nama OLT" name="site" id="namaAkunInput">
+                            </div>
+        
+                            <div class="form-group">
+                                <label for="ipolt">IP OLT</label>
+                                <input type="text" class="form-control" placeholder="IP OLT (Cth. 192.168.xxx.xxx)" name="ipolt" id="ipOltInput">
+                            </div>
+        
+                            <div class="form-group">
+                                <label for="portolt">Port OLT</label>
+                                <input type="text" class="form-control" placeholder="Port OLT (Cth. 80, 8080)" name="portolt" id="portOltInput">
+                            </div>
+        
+                            <div class="form-group">
+                                <label for="ipvpn">IP Address VPN</label>
+                                <input type="text" class="form-control" placeholder="IP Address VPN" name="ipvpn" id="ipVpnInput">
                             </div>
                         </div>
-                    </div>
-                </div>
-        <!-- Modal Tambah Mikrotik -->
-        <div class="modal fade" id="addMikrotikModal" tabindex="-1" role="dialog" aria-labelledby="addMikrotikModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="addMikrotikModalLabel">Tambah Mikrotik</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="addMikrotikForm" action="{{ route('vpn.tambahmikrotik') }}" method="post">
-                            @csrf
-                            <div class="form-group">
-                                <label for="ipmikrotik">IP VPN / IP Public</label>
-                                <input type="text" class="form-control" placeholder="172.160.x.x" name="ipmikrotik" id="ipmikrotik" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="site">Site / Nama Mikrotik</label>
-                                <input type="text" class="form-control" placeholder="Site Indramayu" name="site" id="site" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="username">Username</label>
-                                <input type="text" class="form-control" placeholder="Username" name="username" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="password">Password</label>
-                                <input type="password" class="form-control" placeholder="Password" name="password" required>
-                            </div>
-                            <button type="submit" class="btn btn-success">Tambah Mikrotik</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Modal Pemberitahuan -->
-        <div class="modal fade" id="notificationModal" tabindex="-1" role="dialog" aria-labelledby="notificationModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="notificationModalLabel">Pemberitahuan</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <p style="font-size: 20px;">Pada halaman ini berfungsi sebagai halaman penambahan mikrotik, entah itu dari Mikrotik yang sudah terhubung dengan VPN yang telah dibuat di halaman <a href="{{ route('vpn.index') }}">Data VPN</a> atau data mikrotik Anda yang sudah memiliki IP Public sendiri.</p>
-                        <hr>
-                        <p class="mb-0" style="font-size: 20px;">Jika Router MikroTik Anda tidak mempunyai IP Public, silakan buat akun <a href="{{ route('vpn.index') }}">VPN</a> pada form yang sudah disiapkan. Gratis tanpa biaya tambahan dan boleh lebih dari satu.</p>
-                    </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+                            <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
 
 
 
+        <!-- Modal for MikroTik Script -->
+        <div class="modal fade" id="scriptModal" tabindex="-1" aria-labelledby="scriptModalLabel"
+            aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addVpnModalLabel">Script MikroTik</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <textarea id="mikrotikScript" class="form-control" rows="10" style="width: 100%; height: 300px; resize: none;"
+                            disabled></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" onclick="copyToClipboard()">Copy</button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
 
     <script>
@@ -515,7 +722,7 @@
                                     'success'
                                 ).then(() => {
                                     location
-                                .reload(); // Reload the page to update the table
+                                        .reload(); // Reload the page to update the table
                                 });
                             },
                             error: function(xhr) {
@@ -586,65 +793,121 @@
     </script>
 
     <script>
-  $(document).ready(function() {
-    $('#mikrotikTable').DataTable();
+        $(document).ready(function() {
+            $('#mikrotikTable').DataTable();
+            $('#olttable').DataTable();
 
-    // Handle Edit
-    $('.editMikrotik').click(function() {
-        var id = $(this).data('id');
-        $.get('{{ route('vpn.editmikotik', '') }}/' + id, function(data) {
-            if (data.error) {
-                Swal.fire('Error', data.error, 'error');
-                return;
-            }
-            $('#editMikrotikModal').modal('show');
-            $('#editMikrotikForm').attr('action', '{{ url("/home/datamikrotik/") }}/' + id + '/update');
-            $('#edit_ipmikrotik').val(data.ipmikrotik);
-            $('#edit_site').val(data.site);
-            $('#edit_username').val(data.username);
-            $('#edit_password').val(data.password);
-        }).fail(function(jqXHR, textStatus, errorThrown) {
-            Swal.fire('Error', 'Gagal memuat data: ' + textStatus, 'error');
-        });
-    });
+            // Handle Edit
+            $('.editMikrotik').click(function() {
+                var id = $(this).data('id');
+                $.get('{{ route('vpn.editmikotik', '') }}/' + id, function(data) {
+                    if (data.error) {
+                        Swal.fire('Error', data.error, 'error');
+                        return;
+                    }
+                    $('#editMikrotikModal').modal('show');
+                    $('#editMikrotikForm').attr('action', '{{ url('/home/datamikrotik/') }}/' +
+                        id + '/update');
+                    $('#edit_ipmikrotik').val(data.ipmikrotik);
+                    $('#edit_site').val(data.site);
+                    $('#edit_username').val(data.username);
+                    $('#edit_password').val(data.password);
+                }).fail(function(jqXHR, textStatus, errorThrown) {
+                    Swal.fire('Error', 'Gagal memuat data: ' + textStatus, 'error');
+                });
+            });
 
-    // Handle Delete
-    $('.deleteMikrotik').click(function() {
-        var id = $(this).data('id');
-        Swal.fire({
-            title: 'Apakah Anda yakin?',
-            text: "Data ini akan dihapus secara permanen!",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: 'Ya, hapus!'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: '{{ route('vpn.destroymikrotik', '') }}/' + id,
-                    type: 'DELETE',
-                    data: {
-                        "_token": "{{ csrf_token() }}",
-                    },
-                    success: function(response) {
-                        if(response.status === 'success') {
-                            Swal.fire('Dihapus!', 'Data Mikrotik telah dihapus.', 'success').then(() => {
-                                location.reload();
-                            });
-                        } else {
-                            Swal.fire('Gagal!', 'Data Mikrotik gagal dihapus.', 'error');
-                        }
-                    },
-                    error: function(jqXHR, textStatus, errorThrown) {
-                        Swal.fire('Gagal!', 'Terjadi kesalahan saat menghapus data: ' + textStatus, 'error');
+            // Handle Delete
+            $('.deleteMikrotik').click(function() {
+                var id = $(this).data('id');
+                Swal.fire({
+                    title: 'Apakah Anda yakin?',
+                    text: "Data ini akan dihapus secara permanen!",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Ya, hapus!'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: '{{ route('vpn.destroymikrotik', '') }}/' + id,
+                            type: 'DELETE',
+                            data: {
+                                "_token": "{{ csrf_token() }}",
+                            },
+                            success: function(response) {
+                                if (response.status === 'success') {
+                                    Swal.fire('Dihapus!',
+                                            'Data Mikrotik telah dihapus.', 'success')
+                                        .then(() => {
+                                            location.reload();
+                                        });
+                                } else {
+                                    Swal.fire('Gagal!', 'Data Mikrotik gagal dihapus.',
+                                        'error');
+                                }
+                            },
+                            error: function(jqXHR, textStatus, errorThrown) {
+                                Swal.fire('Gagal!',
+                                    'Terjadi kesalahan saat menghapus data: ' +
+                                    textStatus, 'error');
+                            }
+                        });
                     }
                 });
-            }
+            });
         });
-    });
-  });
+    </script>
+<script>
+    function generateScript(ipolt, portvpn, portolt) {
+        const script = `/ip firewall nat remove [find comment="OLTVPNAQT"]\n/ip firewall nat\n` +
+            `add chain=dstnat comment="OLTVPNAQT"\\\n` +
+            `dst-port=${portvpn} protocol=tcp\\\n` +
+            `action=dst-nat to-addresses=${ipolt} to-ports=${portolt}`;
+        document.getElementById('mikrotikScript').value = script;
+    }
+
+    function hapusOlt(id) {
+        if (confirm("Apakah Anda yakin ingin menghapus OLT ini?")) {
+            // Kirim request ke server untuk menghapus OLT
+            console.log("Hapus OLT dengan ID:", id);
+        }
+    }
+
+    function editOlt(id) {
+        // Tambahkan logika untuk mengedit OLT
+        console.log("Edit OLT dengan ID:", id);
+    }
+
+    function copyToClipboard() {
+        const textarea = document.getElementById('mikrotikScript');
+        textarea.select(); // Select the text
+        textarea.setSelectionRange(0, 99999); // For mobile devices
+        navigator.clipboard.writeText(textarea.value) // Copy the text
+            .then(() => {
+                alert('Script copied to clipboard!');
+            })
+            .catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+    }
 </script>
+    <script>
+    function openEditModal(id, site, ipolt, portolt, ipvpn) {
+    // Set input values
+    document.getElementById('oltIdInput').value = id;
+    document.getElementById('namaAkunInput').value = site;
+    document.getElementById('ipOltInput').value = ipolt;
+    document.getElementById('portOltInput').value = portolt;
+    document.getElementById('ipVpnInput').value = ipvpn;
+
+    // Show modal
+    $('#editOltModal').modal('show');
+}
+
+</script>
+
 </body>
 
 </html>
