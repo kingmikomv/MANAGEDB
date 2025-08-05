@@ -28,11 +28,14 @@ Route::prefix('home')->group(function () {
     Route::get('/', [VpnController::class, 'index'])->name('index.depan');
     // Tambahkan route lain di sini
 });
-Route::prefix('/home/network')->controller(VpnController::class)->group(function () {
+Route::prefix('/home/network')->controller(VpnController::class)->group(function ($id = null) {
 
     Route::get('/', 'index')->name('vpn.index');
     Route::post('/uploadvpn', 'uploadvpn')->name('vpn.upload');
     Route::post('/uploadmikrotik', 'tambahmikrotik')->name('vpn.tambahmikrotik');
+    Route::delete('/hapusvpn/{id}', 'hapusvpn')->name('hapusvpn');
+
+    
     Route::post('/editmikrotik', 'editmikroti')->name('vpn.editmikotik');
     Route::post('/updatemikrotik', 'updatemikrotik')->name('vpn.updatemikotik');
     Route::post('/destroymikrotik', 'destroymikrotik')->name('vpn.destroymikrotik');
@@ -40,6 +43,7 @@ Route::prefix('/home/network')->controller(VpnController::class)->group(function
 
     Route::get('/masukmikrotik', 'masukmikrotik')->name('masukmikrotik');
     Route::get('/dashboardmikrotik', 'dashboardmikrotik')->name('dashboardmikrotik');
+    
     Route::get('/sync/{ipmikrotik}', 'sync')->name('sync');
 
     Route::post('/tambaholt', 'tambaholt')->name('tambaholt');

@@ -708,7 +708,7 @@
                     if (result.isConfirmed) {
                         // AJAX request to delete the data
                         $.ajax({
-                            url: 'datavpn/' + id,
+                            url: `/home/network/hapusvpn/${id}`, // Route dengan parameter ID
                             type: 'DELETE',
                             data: {
                                 "_token": "{{ csrf_token() }}",

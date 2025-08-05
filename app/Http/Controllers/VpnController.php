@@ -20,7 +20,7 @@ class VpnController extends Controller
     {
         $data = Vpn::get();
         $mikrotik = Mikrotik::get();
-                $olts = OLT::all();
+        $olts = OLT::all();
         $olt = OLT::get();
 
         return view('Dashboard.depan.vpn.index', compact('data', 'mikrotik', 'olts', 'olt'));
@@ -415,7 +415,7 @@ class VpnController extends Controller
         $data = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
         $datavpn = Vpn::where('ipaddress', $data->ipmikrotik)->first();
         $data = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
-        
+
 
         // Set 'portweb' dari input request atau data VPN (jika ada)
         $portweb = $request->input('portweb') ?? ($datavpn->portweb ?? null);
@@ -1054,8 +1054,75 @@ class VpnController extends Controller
             return redirect()->back();
         }
     }
+    public function hapusvpn(Request $request, $id)
+    {
+        $username = $request->input('username');
 
-     public function hapusolt($id)
+        if (!$username) {
+            return response()->json(['error' => 'Username is required.'], 400);
+        }
+
+        $client = new Client([
+            'host' => env('MIKROTIK_HOST'),
+            'user' => env('MIKROTIK_USER'),
+            'pass' => env('MIKROTIK_PASS'),
+        ]);
+
+        $vpn = VPN::findOrFail($id);
+
+        if ($vpn->username !== $username) {
+            return response()->json(['error' => 'Username does not match.'], 400);
+        }
+
+        try {
+            // Search for PPP Secret by name
+            $query = new Query('/ppp/secret/print');
+            $response = $client->query($query)->read();
+
+            $matchedSecret = null;
+            foreach ($response as $secret) {
+                if (isset($secret['name']) && $secret['name'] === $username) {
+                    $matchedSecret = $secret;
+                    break;
+                }
+            }
+
+            if ($matchedSecret) {
+                $secretId = $matchedSecret['.id'];
+
+                $removeQuery = new Query('/ppp/secret/remove');
+                $removeQuery->equal('.id', $secretId);
+                $client->query($removeQuery)->read();
+            } else {
+                return response()->json(['error' => 'PPP Secret not found.'], 404);
+            }
+
+            // Search for and remove Firewall NAT rules by name
+            $natComments = ['AQT_' . $username . '_API', 'AQT_' . $username . '_WEB', 'AQT_' . $username . '_MikroTik'];
+            foreach ($natComments as $comment) {
+                $query = new Query('/ip/firewall/nat/print');
+                $response = $client->query($query)->read();
+
+                foreach ($response as $rule) {
+                    if (isset($rule['comment']) && $rule['comment'] && $rule['comment'] === $comment) {
+                        $ruleId = $rule['.id'];
+
+                        $removeQuery = new Query('/ip/firewall/nat/remove');
+                        $removeQuery->equal('.id', $ruleId);
+                        $client->query($removeQuery)->read();
+                    }
+                }
+            }
+            //Log::info();
+            // Delete the VPN record from the database
+            $vpn->delete();
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to delete PPP Secret or Firewall NAT rules: ' . $e->getMessage()], 500);
+        }
+
+        return response()->json(['success' => 'Data berhasil dihapus']);
+    }
+    public function hapusolt($id)
     {
         try {
             // Konfigurasi koneksi ke MikroTik
@@ -1109,7 +1176,7 @@ class VpnController extends Controller
 
     public function updateolt(Request $request)
     {
-        
+
         // Validasi data
         $request->validate([
             'id' => 'required|exists:olt,id', // Pastikan ID ada di tabel olts
