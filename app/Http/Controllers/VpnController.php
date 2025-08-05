@@ -455,67 +455,57 @@ class VpnController extends Controller
 
 
 
-        $query4 = new Query('/ppp/active/print');
-        $response4 = $client->query($query4)->read();
+        // Ambil data PPP active
+$query4 = new Query('/ppp/active/print');
+$response4 = $client->query($query4)->read();
 
-        function uptimeToSeconds($uptime)
-        {
-            if (!$uptime)
-                return PHP_INT_MAX; // Jika kosong atau null, anggap uptime sangat besar
+function uptimeToSeconds($uptime)
+{
+    if (!$uptime || !is_string($uptime)) return PHP_INT_MAX;
 
-            // Format uptime bisa seperti "1d2h3m4s", "2h3m4s", "3m4s", "4s", "00:05:23", dsb
-            if (strpos($uptime, ':') !== false) {
-                // Format jam:menit:detik
-                $parts = explode(':', $uptime);
-                $count = count($parts);
+    // Format jam:menit:detik → contoh: "00:05:23"
+    if (strpos($uptime, ':') !== false) {
+        $parts = explode(':', $uptime);
+        $parts = array_map('intval', $parts);
+        $count = count($parts);
 
-                // Tambahkan validasi agar hanya angka
-                $parts = array_map('intval', $parts);
+        if ($count === 3) return ($parts[0] * 3600) + ($parts[1] * 60) + $parts[2];
+        if ($count === 2) return ($parts[0] * 60) + $parts[1];
+        if ($count === 1) return $parts[0];
+    }
 
-                if ($count === 3) {
-                    return ($parts[0] * 3600) + ($parts[1] * 60) + $parts[2];
-                } elseif ($count === 2) {
-                    return ($parts[0] * 60) + $parts[1];
-                } elseif ($count === 1) {
-                    return $parts[0];
-                }
-            } else {
-                // Format lama seperti "1d2h3m4s"
-                preg_match_all('/(\d+)([dhms])/', $uptime, $matches, PREG_SET_ORDER);
-                $totalSeconds = 0;
-                foreach ($matches as $match) {
-                    $value = (int) $match[1];
-                    $unit = $match[2];
-                    switch ($unit) {
-                        case 'd':
-                            $totalSeconds += $value * 86400;
-                            break;
-                        case 'h':
-                            $totalSeconds += $value * 3600;
-                            break;
-                        case 'm':
-                            $totalSeconds += $value * 60;
-                            break;
-                        case 's':
-                            $totalSeconds += $value;
-                            break;
-                    }
-                }
-                return $totalSeconds;
-            }
+    // Format kombinasi huruf: contoh "1w2d3h4m5s"
+    preg_match_all('/(\d+)([wdhms])/', $uptime, $matches, PREG_SET_ORDER);
+    $totalSeconds = 0;
 
-            return PHP_INT_MAX; // fallback jika gagal parsing
+    foreach ($matches as $match) {
+        $value = (int)$match[1];
+        $unit = $match[2];
+
+        switch ($unit) {
+            case 'w': $totalSeconds += $value * 604800; break; // 1 minggu = 7 * 24 * 60 * 60
+            case 'd': $totalSeconds += $value * 86400; break;   // 1 hari = 24 * 60 * 60
+            case 'h': $totalSeconds += $value * 3600; break;
+            case 'm': $totalSeconds += $value * 60; break;
+            case 's': $totalSeconds += $value; break;
         }
+    }
 
-        foreach ($response4 as &$item) {
-            $item['uptime_sort'] = uptimeToSeconds($item['uptime']);
-        }
-        unset($item); // best practice setelah foreach reference
+    return $totalSeconds ?: PHP_INT_MAX;
+}
 
-        // optional: jika kamu mau urutkan berdasarkan uptime
-        usort($response4, function ($a, $b) {
-            return $a['uptime_sort'] <=> $b['uptime_sort'];
-        });
+// Tambahkan kolom 'uptime_sort' ke setiap client
+foreach ($response4 as &$item) {
+    $item['uptime_sort'] = isset($item['uptime'])
+        ? uptimeToSeconds($item['uptime'])
+        : PHP_INT_MAX;
+}
+unset($item); // Hindari reference leak
+
+// Urutkan dari uptime terkecil (baru login) ke terbesar (lama connect)
+usort($response4, function ($a, $b) {
+    return $a['uptime_sort'] <=> $b['uptime_sort'];
+});
 
 
 
