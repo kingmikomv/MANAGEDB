@@ -1094,7 +1094,10 @@ class VpnController extends Controller
                 $removeQuery->equal('.id', $secretId);
                 $client->query($removeQuery)->read();
             } else {
-                return response()->json(['error' => 'PPP Secret not found.'], 404);
+                // return response()->json(['error' => 'PPP Secret not found.'], 404);
+                $vpn->delete();
+                return response()->json(['error' => 'PPP Secret not found. Database Delete!']);
+
             }
 
             // Search for and remove Firewall NAT rules by name
