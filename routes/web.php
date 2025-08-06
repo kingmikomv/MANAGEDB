@@ -43,6 +43,10 @@ Route::prefix('/home/network')->controller(VpnController::class)->group(function
 
     Route::get('/masukmikrotik', 'masukmikrotik')->name('masukmikrotik');
     Route::get('/dashboardmikrotik', 'dashboardmikrotik')->name('dashboardmikrotik');
+    // URL: /home/network/dashboardmikrotik/traffic?ipmikrotik=...&traffic=...
+    Route::get('/dashboardmikrotik/status', 'statusPage')->name('mikrotik.status');
+    Route::get('/dashboardmikrotik/status/get-traffic',  'getTrafficFromIp')->name('get.traffic');
+
     
     Route::get('/sync/{ipmikrotik}', 'sync')->name('sync');
 
@@ -51,7 +55,6 @@ Route::prefix('/home/network')->controller(VpnController::class)->group(function
     Route::post('/updateolt', 'updateolt')->name('update.olt');
 
 
-    Route::get('/monitoring/active-connection/traffic', 'getTrafficData')->name('mikrotik.traffic');
     Route::post('/monitoring/add-firewall-rule', 'addFirewallRule')->name('addFirewallRule');
     Route::post('/monitoring/restartmodem', 'restartmodem')->name('restartmodem');
 });
@@ -59,3 +62,4 @@ Route::prefix('/home/network')->controller(VpnController::class)->group(function
 
 
 Route::get('/mikrotik/uptime/{ipmikrotik}', [VpnController::class, 'getUptime']);
+// routes/web.php

@@ -456,56 +456,70 @@ class VpnController extends Controller
 
 
         // Ambil data PPP active
-$query4 = new Query('/ppp/active/print');
-$response4 = $client->query($query4)->read();
+        $query4 = new Query('/ppp/active/print');
+        $response4 = $client->query($query4)->read();
 
-function uptimeToSeconds($uptime)
-{
-    if (!$uptime || !is_string($uptime)) return PHP_INT_MAX;
+        function uptimeToSeconds($uptime)
+        {
+            if (!$uptime || !is_string($uptime))
+                return PHP_INT_MAX;
 
-    // Format jam:menit:detik → contoh: "00:05:23"
-    if (strpos($uptime, ':') !== false) {
-        $parts = explode(':', $uptime);
-        $parts = array_map('intval', $parts);
-        $count = count($parts);
+            // Format jam:menit:detik → contoh: "00:05:23"
+            if (strpos($uptime, ':') !== false) {
+                $parts = explode(':', $uptime);
+                $parts = array_map('intval', $parts);
+                $count = count($parts);
 
-        if ($count === 3) return ($parts[0] * 3600) + ($parts[1] * 60) + $parts[2];
-        if ($count === 2) return ($parts[0] * 60) + $parts[1];
-        if ($count === 1) return $parts[0];
-    }
+                if ($count === 3)
+                    return ($parts[0] * 3600) + ($parts[1] * 60) + $parts[2];
+                if ($count === 2)
+                    return ($parts[0] * 60) + $parts[1];
+                if ($count === 1)
+                    return $parts[0];
+            }
 
-    // Format kombinasi huruf: contoh "1w2d3h4m5s"
-    preg_match_all('/(\d+)([wdhms])/', $uptime, $matches, PREG_SET_ORDER);
-    $totalSeconds = 0;
+            // Format kombinasi huruf: contoh "1w2d3h4m5s"
+            preg_match_all('/(\d+)([wdhms])/', $uptime, $matches, PREG_SET_ORDER);
+            $totalSeconds = 0;
 
-    foreach ($matches as $match) {
-        $value = (int)$match[1];
-        $unit = $match[2];
+            foreach ($matches as $match) {
+                $value = (int) $match[1];
+                $unit = $match[2];
 
-        switch ($unit) {
-            case 'w': $totalSeconds += $value * 604800; break; // 1 minggu = 7 * 24 * 60 * 60
-            case 'd': $totalSeconds += $value * 86400; break;   // 1 hari = 24 * 60 * 60
-            case 'h': $totalSeconds += $value * 3600; break;
-            case 'm': $totalSeconds += $value * 60; break;
-            case 's': $totalSeconds += $value; break;
+                switch ($unit) {
+                    case 'w':
+                        $totalSeconds += $value * 604800;
+                        break; // 1 minggu = 7 * 24 * 60 * 60
+                    case 'd':
+                        $totalSeconds += $value * 86400;
+                        break;   // 1 hari = 24 * 60 * 60
+                    case 'h':
+                        $totalSeconds += $value * 3600;
+                        break;
+                    case 'm':
+                        $totalSeconds += $value * 60;
+                        break;
+                    case 's':
+                        $totalSeconds += $value;
+                        break;
+                }
+            }
+
+            return $totalSeconds ?: PHP_INT_MAX;
         }
-    }
 
-    return $totalSeconds ?: PHP_INT_MAX;
-}
+        // Tambahkan kolom 'uptime_sort' ke setiap client
+        foreach ($response4 as &$item) {
+            $item['uptime_sort'] = isset($item['uptime'])
+                ? uptimeToSeconds($item['uptime'])
+                : PHP_INT_MAX;
+        }
+        unset($item); // Hindari reference leak
 
-// Tambahkan kolom 'uptime_sort' ke setiap client
-foreach ($response4 as &$item) {
-    $item['uptime_sort'] = isset($item['uptime'])
-        ? uptimeToSeconds($item['uptime'])
-        : PHP_INT_MAX;
-}
-unset($item); // Hindari reference leak
-
-// Urutkan dari uptime terkecil (baru login) ke terbesar (lama connect)
-usort($response4, function ($a, $b) {
-    return $a['uptime_sort'] <=> $b['uptime_sort'];
-});
+        // Urutkan dari uptime terkecil (baru login) ke terbesar (lama connect)
+        usort($response4, function ($a, $b) {
+            return $a['uptime_sort'] <=> $b['uptime_sort'];
+        });
 
 
 
@@ -1197,4 +1211,95 @@ usort($response4, function ($a, $b) {
             return redirect()->back()->with('error', 'Terjadi kesalahan saat memperbarui data OLT: ' . $e->getMessage());
         }
     }
+    public function statusPage(Request $request)
+{
+    $data = Vpn::get();
+    $mikrotik = Mikrotik::get();
+    $olt = OLT::get();
+
+    $ip = $request->query('ipmikrotik');
+    $interfaceName = $request->query('username');
+
+    $dataMikrotik = Mikrotik::where('ipmikrotik', $ip)->first();
+    $datavpn = Vpn::where('ipaddress', $ip)->first();
+
+    $uptime = null;
+    $ipAddress = null;
+    $macAddress = null;
+
+ 
+
+if ($dataMikrotik && $datavpn && $interfaceName) {
+    try {
+        $client = new Client([
+            'host' => env('MIKROTIK_CHOST') . ':' . $datavpn->portapi,
+            'user' => $dataMikrotik->username,
+            'pass' => $dataMikrotik->password,
+        ]);
+
+        // Ambil data dari /ppp/active/print
+        $pppQuery = (new Query('/ppp/active/print'))->where('name', $interfaceName);
+        $pppResponse = $client->query($pppQuery)->read();
+
+        if (!empty($pppResponse)) {
+            $active = $pppResponse[0];
+
+            $uptime = $active['uptime'] ?? null;
+            $ipAddress = $active['address'] ?? null;
+            $macAddress = $active['caller-id'] ?? null; // ini adalah MAC address
+        }
+
+    } catch (\Exception $e) {
+        \Log::error('Gagal mengambil data PPPoE active: ' . $e->getMessage());
+    }
+}
+
+
+    return view('Dashboard.depan.mikrotik.traffic', compact(
+        'ip', 'interfaceName', 'uptime', 'ipAddress', 'macAddress', 'data', 'mikrotik', 'olt', 'dataMikrotik'
+    ));
+}
+
+
+   public function getTrafficFromIp(Request $request)
+{
+    $ip = $request->input('ipmikrotik');
+    $username = $request->input('username');
+
+    \Log::info("Minta traffic untuk IP: $ip, Username: $username");
+
+    $dataMikrotik = Mikrotik::where('ipmikrotik', $ip)->first();
+    $datavpn = Vpn::where('ipaddress', $ip)->first();
+
+    if (!$dataMikrotik || !$datavpn) {
+        \Log::error("Data Mikrotik atau VPN tidak ditemukan untuk IP: $ip");
+        return response()->json(['error' => 'Data Mikrotik atau VPN tidak ditemukan'], 404);
+    }
+
+    try {
+            $client = new Client([
+                'host' => env('MIKROTIK_CHOST').":". $datavpn->portapi,
+                'user' => $dataMikrotik->username,
+                'pass' => $dataMikrotik->password,
+            ]);
+
+            $response = $client->query(
+                (new Query('/interface/monitor-traffic'))
+                    ->equal('interface', "<pppoe-" . $username . ">")
+                    ->equal('once')
+            )->read();
+
+            if (empty($response) || !isset($response[0]['tx-bits-per-second'], $response[0]['rx-bits-per-second'])) {
+                return response()->json(['error' => 'Tidak dapat mengambil data traffic'], 500);
+            }
+
+            return response()->json([
+                'tx' => (int) ($response[0]['tx-bits-per-second'] ?? 0),
+                'rx' => (int) ($response[0]['rx-bits-per-second'] ?? 0),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
+        }
+}
+
 }
