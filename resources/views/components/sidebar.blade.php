@@ -1,7 +1,7 @@
 <aside class="main-sidebar sidebar-dark-primary elevation-4">
     <!-- Brand Logo -->
     <a href="index3.html" class="brand-link">
-        <img src="https://png.pngtree.com/png-vector/20211106/ourmid/pngtree-letter-m-logo-png-image_4008793.png"
+        <img src="https://us.123rf.com/450wm/mopc95/mopc951609/mopc95160900019/65023633-abstract-red-letter-m-logo-design-template-icon-shape-element-you-can-use-logotype-in-energy.jpg"
             alt="AdminLTE Logo" class="brand-image img-circle elevation-3" style="opacity: .8">
         <span class="brand-text font-weight-light">MANAGE DB</span>
     </a>
@@ -37,7 +37,7 @@
                 <!-- MikroTik Treeview -->
                 <li class="nav-item has-treeview">
                     <a href="#" class="nav-link">
-                        <i class="nav-icon fas fa-book"></i>
+                        <i class="nav-icon fas fa-sitemap"></i>
                         <p>
                             MikroTik
                             <i class="fas fa-angle-left right"></i>
@@ -50,7 +50,7 @@
                                     'ipmikrotik' => $listmikrotik->ipmikrotik,
                                     'portweb' => $listmikrotik->portweb,
                                 ]) }}" class="nav-link">
-                                    <i class="far fa-circle nav-icon"></i>
+                                    <i class="fas fa-server nav-icon"></i>
                                     <p>{{ $listmikrotik->site }}</p>
                                 </a>
                             </li>

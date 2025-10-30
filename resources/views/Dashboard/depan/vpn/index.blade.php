@@ -44,19 +44,21 @@
                                         data-target="#info">
                                         <i class="fas fa-info"></i> Informasi dan Cara Penggunaan
                                     </button>
+                                    <div class="table-responsive">
+
                                     <table id="vpnTable"
-                                        class="table  mt-3 table-striped table-bordered display nowrap">
+                                        class="table table-striped table-bordered">
                                         <thead>
                                             <tr>
                                                 <th>No</th>
                                                 <th>Name</th>
                                                 <th>Username</th>
                                                 <th>Password</th>
-                                                <th>IP Address</th>
-                                                <th>PORT Winbox</th>
+                                                <th>IP VPN</th>
+                                                <th>Winbox</th>
                                                 <th>VPN MikroTik</th>
-                                                <th>Skrip Mikrotik</th>
-                                                <th>Action</th>
+                                                <th>Skrip</th>
+                                                <th>ACT</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -79,27 +81,29 @@
                                                     <td>
                                                         <button type="button" class="btn btn-primary"
                                                             data-toggle="modal" data-target="#vpnInfoModal">
-                                                            <i class="fas fa-info"></i> Info
+                                                            <i class="fas fa-info"></i>
                                                         </button>
                                                     </td>
                                                     <td>
                                                         <button type="button" class="btn btn-danger btn-delete"
                                                             data-id="{{ $item->id }}"
                                                             data-username="{{ $item->username }}">
-                                                            <i class="fas fa-trash"></i> Hapus
+                                                            <i class="fas fa-trash"></i>
                                                         </button>
                                                     </td>
                                                 </tr>
                                             @endforeach
                                         </tbody>
                                     </table>
+                                                                        </div>
+
                                 </div>
 
                             </div>
                         </div>
                         <!-- /.col -->
 
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <div class="card">
                                 <div class="card-header">
                                     <h5 class="card-title">MikroTik</h5>
@@ -168,7 +172,7 @@
 
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <div class="card">
                                 <div class="card-header">
                                     <h5 class="card-title">OLT</h5>
@@ -288,7 +292,8 @@
 
                         <div class="form-group">
                             <label for="password">Port Winbox ( OPTIONAL )</label>
-                            <input type="number" class="form-control" placeholder="Default : 8291" name="portmk">
+                            <input type="number" class="form-control" placeholder="Default : 8291 Winbox" name="portwbx">
+
                         </div>
 
                         <div class="form-group">
@@ -633,7 +638,6 @@
                 info: true,
                 lengthChange: true,
                 responsive: true,
-                scrollX: true // Enables horizontal scrolling
             });
 
             // Handle the Info button click
@@ -820,6 +824,7 @@
             // Handle Delete
             $('.deleteMikrotik').click(function() {
                 var id = $(this).data('id');
+                console.log(id);
                 Swal.fire({
                     title: 'Apakah Anda yakin?',
                     text: "Data ini akan dihapus secara permanen!",
@@ -831,7 +836,7 @@
                 }).then((result) => {
                     if (result.isConfirmed) {
                         $.ajax({
-                            url: '{{ route('vpn.destroymikrotik', '') }}/' + id,
+url: "{{ route('vpn.destroymikrotik', '') }}/" + id,
                             type: 'DELETE',
                             data: {
                                 "_token": "{{ csrf_token() }}",

@@ -20,7 +20,7 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
-Auth::routes(['register' => false]);
+Auth::routes(['register' => true]);
 
 
 Route::prefix('home')->group(function () {
@@ -38,7 +38,7 @@ Route::prefix('/home/network')->controller(VpnController::class)->group(function
     
     Route::post('/editmikrotik', 'editmikroti')->name('vpn.editmikotik');
     Route::post('/updatemikrotik', 'updatemikrotik')->name('vpn.updatemikotik');
-    Route::post('/destroymikrotik', 'destroymikrotik')->name('vpn.destroymikrotik');
+    Route::delete('/destroymikrotik/{id}', 'destroymikrotik')->name('vpn.destroymikrotik');
     Route::get('/aksesmikrotik', 'aksesmikrotik')->name('vpn.aksesmikrotik');
 
     Route::get('/masukmikrotik', 'masukmikrotik')->name('masukmikrotik');
@@ -51,8 +51,8 @@ Route::prefix('/home/network')->controller(VpnController::class)->group(function
     Route::get('/sync/{ipmikrotik}', 'sync')->name('sync');
 
     Route::post('/tambaholt', 'tambaholt')->name('tambaholt');
-        Route::get('/hapusolt', 'hapusolt')->name('hapusolt');
-    Route::post('/updateolt', 'updateolt')->name('update.olt');
+        Route::get('/hapusolt/{id}', 'hapusolt')->name('hapusolt');
+    Route::put('/updateolt', 'updateolt')->name('update.olt');
 
 
     Route::post('/monitoring/add-firewall-rule', 'addFirewallRule')->name('addFirewallRule');

@@ -9,13 +9,13 @@
     <div class="wrapper">
 
         <!-- Preloader -->
-     
+
         <!-- Navbar -->
         <x-nav />
         <!-- /.navbar -->
 
         <!-- Main Sidebar Container -->
-        <x-sidebar :mikrotik="$mikrotik" :olt="$olt"/>
+        <x-sidebar :mikrotik="$mikrotik" :olt="$olt" />
 
         <!-- Content Wrapper. Contains page content -->
         <div class="content-wrapper">
@@ -27,12 +27,12 @@
                     <!-- Info boxes -->
                     <!-- /.row -->
                     <div class="row">
-                        <div class="col-12 col-sm-6 col-md-4">
+                        <div class="col-12 col-sm-6 col-md-6">
                             <div class="info-box">
                                 <span class="info-box-icon bg-warning elevation-1"><i class="fas fa-cloud"></i></span>
 
                                 <div class="info-box-content">
-                                    <span class="info-box-text">Site</span>
+                                    <span class="info-box-text">Site Identity</span>
                                     <span class="info-box-number">
                                         {{ $site }}
                                     </span>
@@ -41,22 +41,9 @@
                             </div>
                             <!-- /.info-box -->
                         </div>
-                        <div class="col-12 col-sm-6 col-md-4">
-                            <div class="info-box">
-                                <span class="info-box-icon bg-info elevation-1"><i class="fas fa-cog"></i></span>
 
-                                <div class="info-box-content">
-                                    <span class="info-box-text">CPU Model</span>
-                                    <span class="info-box-number">
-                                        RO: {{ $model }} - Ver: {{ $version }}
-                                    </span>
-                                </div>
-                                <!-- /.info-box-content -->
-                            </div>
-                            <!-- /.info-box -->
-                        </div>
                         <!-- /.col -->
-                        <div class="col-12 col-sm-6 col-md-4">
+                        <div class="col-12 col-sm-6 col-md-6">
                             <div class="info-box mb-3">
                                 <span class="info-box-icon bg-danger elevation-1"><i class="fas fa-bolt"></i></span>
 
@@ -79,43 +66,95 @@
                         <div class="col-md-12">
                             <div class="card">
                                 <div class="card-header">
-                                    <h5 class="card-title">Down</h5>
+                                    <h5 class="card-title">Schedule Down</h5>
                                 </div>
                                 <!-- /.card-header -->
                                 <div class="card-body">
                                     <div class="table-responsive">
-                                        <a href="{{ route('sync', ['ipmikrotik' => $ipmikrotik]) }}"
-                                            class="btn btn-primary mb-3">Sync</a>
-                                        @if ($currentDownUsers)
-                                            <table class="table table-bordered">
+                                        @php
+                                            use Carbon\Carbon;
+
+                                            // Urutkan schedule berdasarkan tanggal + waktu terbaru
+                                            if (!empty($sc) && count($sc) > 0) {
+                                                $sc = collect($sc)
+                                                    ->sortByDesc(function ($item) {
+                                                        $date = $item['start-date'] ?? '1970/01/01';
+                                                        $time = $item['start-time'] ?? '00:00:00';
+
+                                                        // Gabungkan ke format Carbon
+                                                        try {
+                                                            return Carbon::parse(str_replace('/', '-', "$date $time"));
+                                                        } catch (\Exception $e) {
+                                                            return Carbon::createFromTimestamp(0);
+                                                        }
+                                                    })
+                                                    ->values()
+                                                    ->all();
+                                            }
+                                        @endphp
+
+                                        @if (!empty($sc) && count($sc) > 0)
+                                            <table class="table table-bordered table-striped" id="myTableDown">
                                                 <thead>
                                                     <tr>
                                                         <th>No</th>
-                                                        <th>Nama Akun</th>
-                                                        <th>Waktu DOWN</th>
+                                                        <th>Nama</th>
+                                                        <th>Tanggal Down</th>
+                                                        <th>Jam Down</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    @php $noo = 1; @endphp
-                                                    @foreach ($currentDownUsers as $user)
-                                                        <tr>
-                                                            <td>{{$noo++}}</td>
-                                                            <td>{{ $user['namaakun'] }}</td>
+                                                    @php $no = 1; @endphp
+                                                    @foreach ($sc as $schedule)
+                                                        @php
+                                                            $dateRaw = $schedule['start-date'] ?? null;
+                                                            $timeRaw = $schedule['start-time'] ?? null;
 
-                                                            <td>{{ $user['detected_at'] }}</td>
+                                                            // Format tanggal
+                                                            $formattedDate = '-';
+                                                            if ($dateRaw) {
+                                                                try {
+                                                                    $formattedDate = Carbon::parse(
+                                                                        str_replace('/', '-', $dateRaw),
+                                                                    )
+                                                                        ->locale('id')
+                                                                        ->translatedFormat('d F Y');
+                                                                } catch (\Exception $e) {
+                                                                    $formattedDate = '-';
+                                                                }
+                                                            }
+
+                                                            // Format waktu
+                                                            $formattedTime = '-';
+                                                            if ($timeRaw) {
+                                                                try {
+                                                                    $formattedTime =
+                                                                        Carbon::parse($timeRaw)->format('H:i') . ' WIB';
+                                                                } catch (\Exception $e) {
+                                                                    $formattedTime = $timeRaw . ' WIB';
+                                                                }
+                                                            }
+                                                        @endphp
+
+                                                        <tr>
+                                                            <td>{{ $no++ }}</td>
+                                                            <td>{{ $schedule['name'] ?? '-' }}</td>
+                                                            <td>{{ $formattedDate }}</td>
+                                                            <td>{{ $formattedTime }}</td>
                                                         </tr>
                                                     @endforeach
                                                 </tbody>
                                             </table>
                                         @else
-                                            <p>Semua akun aktif, Nyantaaaiii Bestiiihh </p>
+                                            <p>Tidak ada schedule aktif di Mikrotik, Bestiiih 😎</p>
                                         @endif
                                     </div>
+
                                 </div>
 
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <div class="card">
                                 <div class="card-header">
                                     <h5 class="card-title">Active Connection</h5>
@@ -131,6 +170,7 @@
                                                     <th>Action</th>
                                                     <th>Address</th>
                                                     <th>Mac</th>
+                                                    <th>Uptime</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -159,7 +199,8 @@
                                                                         data-port="{{ $portweb }}"><i
                                                                             class="fas fa-sync-alt"></i> Restart
                                                                         Modem</a>
-                                                                    <a class="dropdown-item" href="{{ route('mikrotik.status', ['ipmikrotik' => $ipmikrotik, 'username' => $d['name']]) }}">
+                                                                    <a class="dropdown-item"
+                                                                        href="{{ route('mikrotik.status', ['ipmikrotik' => $ipmikrotik, 'username' => $d['name']]) }}">
                                                                         <i class="fas fa-eye"></i> Pantau Traffik
                                                                     </a>
                                                                     <a class="dropdown-item copy-btn" href="#"><i
@@ -169,6 +210,7 @@
                                                         </td>
                                                         <td id="text-to-copy">{{ $d['address'] }}</td>
                                                         <td id="text-to-copy">{{ $d['caller-id'] }}</td>
+                                                        <td>{{$d['formatted_uptime'] ?? '-'}}</td>
 
                                                     </tr>
                                                 @endforeach
@@ -180,44 +222,6 @@
                             </div>
                         </div>
 
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="card-title">New Online</h5>
-                                </div>
-                                <!-- /.card-header -->
-                                <div class="card-body">
-                                    <div class="table-responsive">
-
-                                        <table id="myTable2" class="table table-bordered table-hover">
-                                            <thead>
-                                                <tr>
-                                                    <th>No</th>
-                                                    <th>Client</th>
-                                                    <th>Address</th>
-                                                    <th>Uptime</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @php $no = 1; @endphp
-
-                                                @foreach ($response4 as $data => $d)
-                                                    <tr>
-                                                        <td>{{ $no++ }}</td>
-                                                        <td>{{ $d['name'] }}</td>
-                                                        <td>{{ $d['address'] }}</td>
-                                                        <td data-order="{{ $d['uptime_sort'] }}">{{ $d['uptime'] }}
-                                                        </td>
-
-                                                    </tr>
-                                                @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                            </div>
-                        </div>
                         <!-- /.col -->
                     </div>
 
@@ -267,7 +271,7 @@
 
 
 
-     
+
         <aside class="control-sidebar control-sidebar-dark">
             <!-- Control sidebar content goes here -->
         </aside>
@@ -284,27 +288,33 @@
 
 
     <script>
-        function fetchUptime() {
-            $.ajax({
-                url: '/mikrotik/uptime/{{ $ipmikrotik }}',
-                method: 'GET',
-                success: function(response) {
-                    if (response.error) {
-                        $('#uptime').text('Uptime: Error');
-                    } else {
-                        $('#uptime').text('Uptime: ' + response.uptime);
-                    }
-                },
-                error: function() {
-                    $('#uptime').text('Uptime: Error');
-                }
-            });
-        }
+    function formatUptime(uptime) {
+        if (!uptime) return '-';
+        const w = (uptime.match(/(\d+)w/) || [,'0'])[1];
+        const d = (uptime.match(/(\d+)d/) || [,'0'])[1];
 
-        // Fetch uptime immediately and then every 5 minutes
-        fetchUptime();
-        setInterval(fetchUptime, 300000); // Refresh uptime every 5 minutes (300000 milliseconds)
-    </script>
+        if (w > 0) return `${w} Minggu`;
+        if (d > 0) return `${d} Hari`;
+        const h = (uptime.match(/(\d+)h/) || [,'0'])[1];
+        if (h > 0) return `${h} Jam`;
+        const m = (uptime.match(/(\d+)m/) || [,'0'])[1];
+        if (m > 0) return `${m} Menit`;
+        const s = (uptime.match(/(\d+)s/) || [,'0'])[1];
+        return `${s} Detik`;
+    }
+
+    function fetchUptime() {
+        $.get('/mikrotik/uptime/{{ $ipmikrotik }}', function(response) {
+            $('#uptime').text(
+                'Uptime: ' + (response.error ? 'Error' : formatUptime(response.uptime))
+            );
+        }).fail(() => $('#uptime').text('Uptime: Error'));
+    }
+
+    fetchUptime();
+    setInterval(fetchUptime, 300000);
+</script>
+
 
     <script>
         $(document).ready(function() {
@@ -315,11 +325,7 @@
                 paging: $('#myTable tbody tr').length >=
                     60, // Aktifkan pagination jika jumlah baris 60 atau lebih
                 pageLength: 30, // Tampilkan 50 baris per halaman jika pagination aktif
-                columnDefs: [{
-                        targets: "_all",
-                        className: "text-center"
-                    } // Center align semua kolom
-                ]
+                
             });
             var table = $('#myTable2').DataTable({
                 responsive: true,
@@ -332,7 +338,7 @@
                 }]
                 // Jangan pakai "order" di sini kalau data sudah diurutkan dari backend
             });
-            
+
 
 
             // Function to get query parameter from URL
@@ -497,7 +503,20 @@
             });
         });
     </script>
-   
+    <script>
+        $(document).ready(function() {
+            $('#myTableDown').DataTable({
+                responsive: true,
+                order: [
+                    [2, 'desc']
+                ], // urutkan kolom tanggal descending
+
+            });
+        });
+    </script>
+
+
+
 </body>
 
 </html>

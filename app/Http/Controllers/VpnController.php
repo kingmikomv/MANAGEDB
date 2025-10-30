@@ -2,17 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Carbon\Carbon;
+use App\Models\Akun;
+use App\Models\Mikrotik;
 use App\Models\OLT;
 use App\Models\Vpn;
-use RouterOS\Query;
-use App\Models\Akun;
-use RouterOS\Client;
-use App\Models\Mikrotik;
+use GuzzleHttp\Exception\ClientException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use GuzzleHttp\Exception\ClientException;
-
+use RouterOS\Client;
+use RouterOS\Query;
 
 class VpnController extends Controller
 {
@@ -25,44 +23,60 @@ class VpnController extends Controller
 
         return view('Dashboard.depan.vpn.index', compact('data', 'mikrotik', 'olts', 'olt'));
     }
+
     public function uploadvpn(Request $req)
     {
-
-
         $namaakun = $req->input('namaakun');
         $username = $req->input('username');
         $password = $req->input('password');
-        $portmkt = $req->input('portmk');
-        $akuncomment = "AQT_" . $namaakun;
+        $portwbx = $req->input('portwbx');
+
+        $akuncomment = 'AQT_'.$namaakun;
+
+        $portwbx = $portwbx ?: 8291;
 
         try {
+            // ==========================
+            // KONEKSI KE MIKROTIK
+            // ==========================
             $client = new Client([
                 'host' => env('MIKROTIK_HOST'),
                 'user' => env('MIKROTIK_USER'),
                 'pass' => env('MIKROTIK_PASS'),
             ]);
-            // dd($client);
+
+            // ==========================
+            // CEK USERNAME SUDAH ADA
+            // ==========================
             $queryAllSecrets = new Query('/ppp/secret/print');
             $response = $client->query($queryAllSecrets)->read();
-
             $existingUsernames = array_column($response, 'name');
+
             if (in_array($username, $existingUsernames)) {
                 session()->flash('error', 'Username sudah ada, silakan gunakan username lain.');
+
                 return redirect()->back();
             }
 
-            // Generate IP address
+            // ==========================
+            // GENERATE IP ADDRESS OTOMATIS
+            // ==========================
             $firstOctet = '172';
             $secondOctet = 16;
             $usedThirdOctets = array_map(function ($secret) {
-                return isset($secret['local-address']) ? explode('.', $secret['local-address'])[2] : null;
+                return isset($secret['local-address'])
+                    ? explode('.', $secret['local-address'])[2]
+                    : null;
             }, $response);
+
             $usedThirdOctets = array_filter($usedThirdOctets);
             $thirdOctet = 11;
+
             while (in_array($thirdOctet, $usedThirdOctets)) {
                 $thirdOctet++;
-                if ($thirdOctet > 254)
-                    throw new \Exception("Tidak ada third octet yang tersedia.");
+                if ($thirdOctet > 254) {
+                    throw new \Exception('Tidak ada third octet yang tersedia.');
+                }
             }
 
             $existingCount = count($response);
@@ -71,23 +85,30 @@ class VpnController extends Controller
             $localIp = "$firstOctet.$secondOctet.$thirdOctet.$fourthOctetLocal";
             $remoteIp = "$firstOctet.$secondOctet.$thirdOctet.$fourthOctetRemote";
 
-            $query = new Query('/ppp/secret/add');
-            $query->equal('name', $username)
-                ->equal('password', $password)
-                ->equal('comment', $akuncomment)
-                ->equal('profile', 'default')
-                ->equal('local-address', $localIp)
-                ->equal('remote-address', $remoteIp);
-            $response = $client->query($query)->read();
+            // ==========================
+            // TAMBAH PPP SECRET
+            // ==========================
+            try {
+                $query = new Query('/ppp/secret/add');
+                $query->equal('name', $username)
+                    ->equal('password', $password)
+                    ->equal('comment', $akuncomment)
+                    ->equal('profile', 'default')
+                    ->equal('local-address', $localIp)
+                    ->equal('remote-address', $remoteIp);
+                $client->query($query)->read();
+            } catch (\Exception $e) {
+                session()->flash('error', 'Gagal menambahkan PPP Secret: '.$e->getMessage());
 
-            if (isset($response['!trap'])) {
-                session()->flash('error', $response['!trap'][0]['message']);
                 return redirect()->back();
             }
 
-            // Port Rules
+            // ==========================
+            // CEK PORT SUDAH DIGUNAKAN
+            // ==========================
             $queryAllNAT = new Query('/ip/firewall/nat/print');
             $natResponse = $client->query($queryAllNAT)->read();
+
             $usedPorts = [];
             foreach ($natResponse as $natRule) {
                 if (isset($natRule['dst-port'])) {
@@ -95,94 +116,102 @@ class VpnController extends Controller
                 }
             }
 
-            // Mikrotik port manual (jika ada)
-            if ($portmkt != null) {
-                if ($portmkt < 43000 || $portmkt > 43999 || in_array($portmkt, $usedPorts)) {
-                    session()->flash('error', 'Port Mikrotik manual tidak valid atau sudah dipakai.');
-                    return redirect()->back();
+            // ==========================
+            // GENERATE PORT MIKROTIK (REMOTE)
+            // ==========================
+            $portmikrotik = null;
+            for ($i = 43000; $i <= 43999; $i++) {
+                if (! in_array($i, $usedPorts)) {
+                    $portmikrotik = $i;
+                    break;
                 }
-                $portmikrotik = $portmkt;
-            } else {
-                $portmikrotik = null;
-                for ($i = 43000; $i <= 43999; $i++) {
-                    if (!in_array($i, $usedPorts)) {
-                        $portmikrotik = $i;
-                        break;
-                    }
-                }
-                if (!$portmikrotik)
-                    throw new \Exception("Tidak ada port MikroTik tersedia di range 43000-43999.");
+            }
+            if (! $portmikrotik) {
+                throw new \Exception('Tidak ada port MikroTik tersedia di range 43000-43999.');
             }
 
-            // API Port
+            // ==========================
+            // ALOKASI PORT API DAN WEB
+            // ==========================
             $portapi = null;
             for ($i = 40000; $i <= 41999; $i++) {
-                if (!in_array($i, $usedPorts)) {
+                if (! in_array($i, $usedPorts)) {
                     $portapi = $i;
                     break;
                 }
             }
-            if (!$portapi)
-                throw new \Exception("Tidak ada port API tersedia di range 40000-41999.");
+            if (! $portapi) {
+                throw new \Exception('Tidak ada port API tersedia di range 40000-41999.');
+            }
 
-            // WEB Port
             $portweb = null;
             for ($i = 42000; $i <= 42999; $i++) {
-                if (!in_array($i, $usedPorts)) {
+                if (! in_array($i, $usedPorts)) {
                     $portweb = $i;
                     break;
                 }
             }
-            if (!$portweb)
-                throw new \Exception("Tidak ada port Web tersedia di range 42000-42999.");
+            if (! $portweb) {
+                throw new \Exception('Tidak ada port Web tersedia di range 42000-42999.');
+            }
 
-            // NAT Rules
-            $natQuery1 = new Query('/ip/firewall/nat/add');
-            $natQuery1->equal('chain', 'dstnat')
-                ->equal('protocol', 'tcp')
-                ->equal('dst-port', $portapi)
-                ->equal('dst-address-list', 'ip-public')
-                ->equal('action', 'dst-nat')
-                ->equal('to-addresses', $remoteIp)
-                ->equal('to-ports', 9000)
-                ->equal('comment', $akuncomment . '_API');
-            $natResponse1 = $client->query($natQuery1)->read();
-            if (isset($natResponse1['!trap'])) {
-                session()->flash('error', $natResponse1['!trap'][0]['message']);
+            // ==========================
+            // TAMBAH NAT RULES
+            // ==========================
+            try {
+                // NAT untuk API
+                $natQuery1 = new Query('/ip/firewall/nat/add');
+                $natQuery1->equal('chain', 'dstnat')
+                    ->equal('protocol', 'tcp')
+                    ->equal('dst-port', $portapi)
+                    ->equal('dst-address-list', 'ip-public')
+                    ->equal('action', 'dst-nat')
+                    ->equal('to-addresses', $remoteIp)
+                    ->equal('to-ports', 9000)
+                    ->equal('comment', $akuncomment.'_API');
+                $client->query($natQuery1)->read();
+
+                // NAT untuk WEB
+                $natQuery2 = new Query('/ip/firewall/nat/add');
+                $natQuery2->equal('chain', 'dstnat')
+                    ->equal('protocol', 'tcp')
+                    ->equal('dst-port', $portweb)
+                    ->equal('dst-address-list', 'ip-public')
+                    ->equal('action', 'dst-nat')
+                    ->equal('to-addresses', $remoteIp)
+                    ->equal('to-ports', $portweb)
+                    ->equal('comment', $akuncomment.'_WEB');
+                $client->query($natQuery2)->read();
+
+                // NAT untuk Winbox/MikroTik
+                $natQuery3 = new Query('/ip/firewall/nat/add');
+                $natQuery3->equal('chain', 'dstnat')
+                    ->equal('protocol', 'tcp')
+                    ->equal('dst-port', $portmikrotik)
+                    ->equal('dst-address-list', 'ip-public')
+                    ->equal('action', 'dst-nat')
+                    ->equal('to-addresses', $remoteIp)
+                    ->equal('to-ports', $portwbx)
+                    ->equal('comment', $akuncomment.'_MikroTik');
+                $client->query($natQuery3)->read();
+            } catch (\Exception $e) {
+                // Kalau gagal menambah NAT, hapus PPP Secret agar tidak nyangkut
+                try {
+                    $removePPP = new Query('/ppp/secret/remove');
+                    $removePPP->equal('name', $username);
+                    $client->query($removePPP)->read();
+                } catch (\Throwable $t) {
+                    // Abaikan error hapus
+                }
+
+                session()->flash('error', 'Gagal menambahkan NAT rules: '.$e->getMessage());
+
                 return redirect()->back();
             }
 
-            $natQuery2 = new Query('/ip/firewall/nat/add');
-            $natQuery2->equal('chain', 'dstnat')
-                ->equal('protocol', 'tcp')
-                ->equal('dst-port', $portweb)
-                ->equal('dst-address-list', 'ip-public')
-                ->equal('action', 'dst-nat')
-                ->equal('to-addresses', $remoteIp)
-                ->equal('to-ports', $portweb)
-                ->equal('comment', $akuncomment . '_WEB');
-            $natResponse2 = $client->query($natQuery2)->read();
-            if (isset($natResponse2['!trap'])) {
-                session()->flash('error', $natResponse2['!trap'][0]['message']);
-                return redirect()->back();
-            }
-
-            $natQuery3 = new Query('/ip/firewall/nat/add');
-            $natQuery3->equal('chain', 'dstnat')
-                ->equal('protocol', 'tcp')
-                ->equal('dst-port', $portmikrotik)
-                ->equal('dst-address-list', 'ip-public')
-                ->equal('action', 'dst-nat')
-                ->equal('to-addresses', $remoteIp)
-                ->equal('to-ports', $portmkt ?? 8291)
-                ->equal('comment', $akuncomment . '_MikroTik');
-            $natResponse3 = $client->query($natQuery3)->read();
-            if (isset($natResponse3['!trap'])) {
-                session()->flash('error', $natResponse3['!trap'][0]['message']);
-                return redirect()->back();
-            }
-
-            // Simpan ke database
+            // ==========================
+            // SIMPAN KE DATABASE
+            // ==========================
             Vpn::create([
                 'namaakun' => $namaakun,
                 'username' => $username,
@@ -191,17 +220,20 @@ class VpnController extends Controller
                 'portapi' => $portapi,
                 'portweb' => $portweb,
                 'portmikrotik' => $portmikrotik,
-                'portwbx' => $portmkt ?? 8291,
+                'portwbx' => $portwbx,
             ]);
 
-            session()->flash('success', "Akun VPN Berhasil Dibuat!");
+            session()->flash('success', 'Akun VPN berhasil dibuat!');
+
             return redirect()->back();
 
         } catch (ClientException $e) {
-            session()->flash('error', "Gagal terhubung ke MikroTik: " . $e->getMessage());
+            session()->flash('error', 'Gagal terhubung ke MikroTik: '.$e->getMessage());
+
             return redirect()->back();
         } catch (\Exception $e) {
-            session()->flash('error', "Terjadi kesalahan: " . $e->getMessage());
+            session()->flash('error', 'Terjadi kesalahan: '.$e->getMessage());
+
             return redirect()->back();
         }
     }
@@ -222,23 +254,27 @@ class VpnController extends Controller
                 'password' => $password,
             ]);
 
-            session()->flash('success', "Mikrotik " . $site . " Berhasil Di Tambahkan");
+            session()->flash('success', 'Mikrotik '.$site.' Berhasil Di Tambahkan');
+
             return redirect()->back();
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to save data: ' . $e->getMessage(),
+                'message' => 'Failed to save data: '.$e->getMessage(),
             ]);
         }
     }
+
     public function editmikrotik($id)
     {
         $mikrotik = Mikrotik::find($id);
-        if (!$mikrotik) {
+        if (! $mikrotik) {
             return response()->json(['error' => 'Data tidak ditemukan'], 404);
         }
+
         return response()->json($mikrotik);
     }
+
     public function updatemikrotik(Request $request, $id)
     {
         $request->validate([
@@ -261,15 +297,19 @@ class VpnController extends Controller
 
         return redirect()->back()->with('error', 'MikroTik not found.');
     }
+
     public function destroymikrotik($id)
     {
         $mikrotik = Mikrotik::find($id);
         if ($mikrotik) {
             $mikrotik->delete();
+
             return response()->json(['status' => 'success']);
         }
+
         return response()->json(['status' => 'error']);
     }
+
     public function aksesMikrotik(Request $request)
     {
 
@@ -284,7 +324,7 @@ class VpnController extends Controller
             try {
                 // Attempt to connect using default MikroTik IP without port information
                 $connection = new Client([
-                    'host' => env('MIKROTIK_CHOST') . ":" . $dataport->portapi,
+                    'host' => env('MIKROTIK_CHOST').':'.$dataport->portapi,
                     'user' => $username,
                     'pass' => $password,
 
@@ -292,9 +332,11 @@ class VpnController extends Controller
 
                 // If connection is successful
                 session()->flash('success', 'Mikrotik Terhubung');
+
                 return redirect()->back();
             } catch (\Exception $e) {
-                session()->flash('error', 'Failed to connect to MikroTik router : ' . $e->getMessage());
+                session()->flash('error', 'Failed to connect to MikroTik router : '.$e->getMessage());
+
                 return redirect()->back();
             }
         } else {
@@ -303,7 +345,7 @@ class VpnController extends Controller
                 try {
                     // Connect with port information from the database
                     $connection = new Client([
-                        'host' => env('MIKROTIK_CHOST') . ":" . $dataport->portapi,
+                        'host' => env('MIKROTIK_CHOST').':'.$dataport->portapi,
                         'user' => $username,
                         'pass' => $password,
 
@@ -311,16 +353,18 @@ class VpnController extends Controller
 
                     // If connection is successful
                     session()->flash('success', 'Mikrotik Terhubung');
+
                     return redirect()->back();
                 } catch (\Exception $e) {
-                    session()->flash('error', 'Failed to connect to MikroTik router :  ' . $e->getMessage());
+                    session()->flash('error', 'Failed to connect to MikroTik router :  '.$e->getMessage());
+
                     return redirect()->back();
                 }
             } else {
                 try {
                     // Connect using the IP without port information
                     $connection = new Client([
-                        'host' => env('MIKROTIK_CHOST') . ":" . $dataport->portapi,
+                        'host' => env('MIKROTIK_CHOST').':'.$dataport->portapi,
                         'user' => $username,
                         'pass' => $password,
 
@@ -328,9 +372,11 @@ class VpnController extends Controller
 
                     // If connection is successful
                     session()->flash('success', 'Mikrotik Terhubung tanpa port dari database');
+
                     return redirect()->back();
                 } catch (\Exception $e) {
-                    session()->flash('error', 'Failed to connect to MikroTik router: ' . $e->getMessage());
+                    session()->flash('error', 'Failed to connect to MikroTik router: '.$e->getMessage());
+
                     return redirect()->back();
                 }
             }
@@ -344,7 +390,7 @@ class VpnController extends Controller
         $data = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
 
         // Cek apakah data MikroTik ditemukan
-        if (!$data) {
+        if (! $data) {
             return redirect()->back()->with('error', 'MikroTik data not found.');
         }
 
@@ -367,7 +413,7 @@ class VpnController extends Controller
         } else {
             // Jika data VPN ditemukan, gunakan 'portapi' dari VPN
             $config = [
-                'host' => env('MIKROTIK_CHOST') . ":" . $portapi, // Menggunakan domain VPN dan port API dari data VPN
+                'host' => env('MIKROTIK_CHOST').':'.$portapi, // Menggunakan domain VPN dan port API dari data VPN
                 'user' => $username,
                 'pass' => $password,
 
@@ -389,7 +435,7 @@ class VpnController extends Controller
             session([
                 'mikrotik_connected' => true,
                 'ipmikrotik' => $ipmikrotik,
-                'portapi' => $portapi
+                'portapi' => $portapi,
             ]);
 
             // Hapus session 'session_disconnected' jika ada
@@ -402,7 +448,7 @@ class VpnController extends Controller
             session()->forget('mikrotik_connected');
             session(['session_disconnected' => true]);
 
-            return redirect()->back()->with('error', 'Error connecting to MikroTik: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error connecting to MikroTik: '.$e->getMessage());
         }
     }
 
@@ -416,283 +462,64 @@ class VpnController extends Controller
         $datavpn = Vpn::where('ipaddress', $data->ipmikrotik)->first();
         $data = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
 
-
         // Set 'portweb' dari input request atau data VPN (jika ada)
         $portweb = $request->input('portweb') ?? ($datavpn->portweb ?? null);
         // Set 'portapi' dari data VPN jika tersedia
         $portapi = $datavpn->portapi ?? null;
-        $config = [
-            'host' => env('MIKROTIK_CHOST') . ":" . $portapi, // Menggunakan domain VPN dan port API dari data VPN
+
+        $client = new Client([
+            'host' => env('MIKROTIK_CHOST').':'.$portapi,
             'user' => $data->username,
             'pass' => $data->password,
+        ]);
+
+        // dd($client);
+
+        $queryIdentity = new Query('/system/identity/print');
+        $identity = $client->query($queryIdentity)->read();
+
+        // Hasilnya array, ambil 'name'
+        $site = $identity[0]['name'] ?? 'Unknown';
+
+        $querySchedule = new Query('/system/scheduler/print');
+        $sc = $client->query($querySchedule)->read();
+
+        $queryActivePPP = new Query('/ppp/active/print');
+        $response3 = $client->query($queryActivePPP)->read();
+
+       foreach ($response3 as &$d) {
+    if (isset($d['uptime'])) {
+        $u = $d['uptime'];
+        if (preg_match('/(\d+)w/', $u, $m))       $d['formatted_uptime'] = $m[1] . ' minggu';
+        elseif (preg_match('/(\d+)d/', $u, $m))  $d['formatted_uptime'] = $m[1] . ' hari';
+        elseif (preg_match('/(\d+)h/', $u, $m))  $d['formatted_uptime'] = $m[1] . ' jam';
+        elseif (preg_match('/(\d+)m/', $u, $m))  $d['formatted_uptime'] = $m[1] . ' menit';
+        elseif (preg_match('/(\d+)s/', $u, $m))  $d['formatted_uptime'] = $m[1] . ' detik';
+        else $d['formatted_uptime'] = '-';
+    } else {
+        $d['formatted_uptime'] = '-';
+    }
+
+    // ubah uptime ke detik biar bisa disort
+    $time = 0;
+    if (preg_match('/(\d+)w/', $u, $m)) $time += $m[1] * 604800;
+    if (preg_match('/(\d+)d/', $u, $m)) $time += $m[1] * 86400;
+    if (preg_match('/(\d+)h/', $u, $m)) $time += $m[1] * 3600;
+    if (preg_match('/(\d+)m/', $u, $m)) $time += $m[1] * 60;
+    if (preg_match('/(\d+)s/', $u, $m)) $time += $m[1];
+    $d['uptime_seconds'] = $time;
+}
+unset($d);
+
+// urutkan berdasarkan uptime paling kecil (baru nyala di atas)
+usort($response3, fn($a, $b) => $a['uptime_seconds'] <=> $b['uptime_seconds']);
+
+
+        $queryActivePPP4 = new Query('/ppp/active/print');
+        $response4 = $client->query($queryActivePPP4)->read();
+
+        return view('Dashboard.depan.mikrotik.dashboardmikrotik', compact('ipmikrotik', 'site', 'mikrotik', 'portweb', 'portapi', 'olt', 'sc', 'response3', 'response4'));
 
-        ];
-
-
-
-        $client = new Client($config);
-
-        // Query untuk mendapatkan data secret di PPP
-        $query = (new Query('/ppp/secret/print'));
-        $response = $client->query($query)->read();
-
-        $totaluser = count($response);
-
-        $query2 = (new Query('/ppp/active/print'));
-        $response2 = $client->query($query2)->read();
-
-        $totalactive = count($response2);
-
-        // Koneksi ke MikroTik menggunakan konfigurasi yang telah dibuat
-        $query3 = (new Query('/ppp/active/print'));
-        $response3 = $client->query($query3)->read();
-
-        //dd($response);
-
-
-
-
-
-
-
-        // Ambil data PPP active
-        $query4 = new Query('/ppp/active/print');
-        $response4 = $client->query($query4)->read();
-
-        function uptimeToSeconds($uptime)
-        {
-            if (!$uptime || !is_string($uptime))
-                return PHP_INT_MAX;
-
-            // Format jam:menit:detik → contoh: "00:05:23"
-            if (strpos($uptime, ':') !== false) {
-                $parts = explode(':', $uptime);
-                $parts = array_map('intval', $parts);
-                $count = count($parts);
-
-                if ($count === 3)
-                    return ($parts[0] * 3600) + ($parts[1] * 60) + $parts[2];
-                if ($count === 2)
-                    return ($parts[0] * 60) + $parts[1];
-                if ($count === 1)
-                    return $parts[0];
-            }
-
-            // Format kombinasi huruf: contoh "1w2d3h4m5s"
-            preg_match_all('/(\d+)([wdhms])/', $uptime, $matches, PREG_SET_ORDER);
-            $totalSeconds = 0;
-
-            foreach ($matches as $match) {
-                $value = (int) $match[1];
-                $unit = $match[2];
-
-                switch ($unit) {
-                    case 'w':
-                        $totalSeconds += $value * 604800;
-                        break; // 1 minggu = 7 * 24 * 60 * 60
-                    case 'd':
-                        $totalSeconds += $value * 86400;
-                        break;   // 1 hari = 24 * 60 * 60
-                    case 'h':
-                        $totalSeconds += $value * 3600;
-                        break;
-                    case 'm':
-                        $totalSeconds += $value * 60;
-                        break;
-                    case 's':
-                        $totalSeconds += $value;
-                        break;
-                }
-            }
-
-            return $totalSeconds ?: PHP_INT_MAX;
-        }
-
-        // Tambahkan kolom 'uptime_sort' ke setiap client
-        foreach ($response4 as &$item) {
-            $item['uptime_sort'] = isset($item['uptime'])
-                ? uptimeToSeconds($item['uptime'])
-                : PHP_INT_MAX;
-        }
-        unset($item); // Hindari reference leak
-
-        // Urutkan dari uptime terkecil (baru login) ke terbesar (lama connect)
-        usort($response4, function ($a, $b) {
-            return $a['uptime_sort'] <=> $b['uptime_sort'];
-        });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        $query = (new Query('/system/resource/print'));
-
-        // Jalankan query dan baca respons
-        $response = $client->query($query)->read();
-
-        $version = $response[0]['version'] ?? 'Unknown version';
-        $model = $response[0]['board-name'] ?? 'Unknown model';
-
-        $queryDateTime = (new Query('/system/clock/print'));
-        $responseDateTime = $client->query($queryDateTime)->read();
-
-        // Query untuk mengambil daftar interface Ethernet dari MikroTik
-        $queryInterfaces = (new Query('/interface/print'));
-        $responseInterfaces = $client->query($queryInterfaces)->read();
-
-        $interfaces = [];
-        $physicalInterfaces = ['ether', 'sfp', 'wifi', 'bonding']; // Common physical interface types
-
-        foreach ($responseInterfaces as $interface) {
-            if (isset($interface['name']) && isset($interface['type'])) {
-                // Check if the interface type indicates a physical interface
-                if (in_array($interface['type'], $physicalInterfaces)) {
-                    $interfaces[] = $interface['name'];
-                }
-            }
-        }
-
-        $queryHotspotUsers = (new Query('/ip/hotspot/user/print'));
-        $responseHotspotUsers = $client->query($queryHotspotUsers)->read();
-
-        // Initialize an array to store the hotspot users
-        $hotspotUsers = [];
-
-        // Iterate over the response to extract the user data
-        foreach ($responseHotspotUsers as $user) {
-            if (isset($user['name'])) {
-                $hotspotUsers[] = $user;
-            }
-        }
-
-
-        $ttuser = count($hotspotUsers);
-
-
-
-
-        $queryActiveHotspotUsers = (new Query('/ip/hotspot/active/print'));
-
-        // Execute the query
-        $responseActiveHotspotUsers = $client->query($queryActiveHotspotUsers)->read();
-
-        // Initialize an array to store active hotspot users
-        $activeHotspotUsers = [];
-
-        // Iterate over the response to extract user data
-        foreach ($responseActiveHotspotUsers as $user) {
-            if (isset($user['name'])) {
-                $activeHotspotUsers[] = $user;
-            }
-        }
-
-        // Count the number of active users
-        $activeUserCount = count($activeHotspotUsers);
-
-
-        $akunDb = Akun::where('site', $data->site)->get();
-        //dd($akunDb);
-        // 3. Ambil data PPP Active dari MikroTik
-        $query5 = (new Query('/ppp/active/print'));
-        $pppActive = $client->query($query5)->read();
-
-        $activeUsernames = collect($pppActive)->pluck('name')->toArray();
-
-        // 4. Load JSON dari public path
-        $filePath = public_path('ppp_down_users.json');
-
-        // Pastikan file ada dan valid
-        if (!file_exists($filePath)) {
-            file_put_contents($filePath, json_encode([]));
-        }
-
-        $json = file_get_contents($filePath);
-        $decoded = json_decode($json, true);
-        $downLog = is_array($decoded) ? $decoded : [];
-
-
-        $currentDownUsers = [];
-
-
-        if (!$akunDb->isEmpty()) {
-            foreach ($akunDb as $akun) {
-                $username = $akun->namaakun;
-
-                if (!in_array($username, $activeUsernames)) {
-                    if (!isset($downLog[$username])) {
-                        $downLog[$username] = Carbon::now('Asia/Jakarta')->format('Y-m-d H:i:s');
-                    }
-
-                    $currentDownUsers[] = [
-                        'namaakun' => $akun->namaakun,
-                        'detected_at' => $downLog[$username],
-                    ];
-                } else {
-                    unset($downLog[$username]);
-                }
-            }
-        }
-
-
-
-        // 5. Simpan file JSON di public
-        file_put_contents($filePath, json_encode($downLog, JSON_PRETTY_PRINT));
-
-
-
-
-
-
-
-
-
-
-
-
-
-        Log::info($activeUserCount);
-
-
-
-        if (!empty($responseDateTime)) {
-            // Ambil date
-            $date = isset($responseDateTime[0]['date']) ? $responseDateTime[0]['date'] : 'N/A';
-
-
-            if (!$data) {
-                return redirect()->back()->with('error', 'MikroTik data not found.');
-            }
-
-
-            // Ambil informasi lain yang dibutuhkan untuk ditampilkan di dashboard
-            $site = $data->site;
-            $username = $data->username;
-
-            // Tampilkan dashboard dengan data yang relevan
-            return view('Dashboard.depan.mikrotik.dashboardmikrotik', compact('ipmikrotik', 'site', 'username', 'date', 'interfaces', 'version', 'model', 'ttuser', 'activeUserCount', 'mikrotik', 'response3', 'portweb', 'portapi', 'response4', 'currentDownUsers', 'olt'));
-        } else {
-            return back()->with('error', 'Data tidak ditemukan.');
-        }
     }
 
     public function sync($ipmikrotik)
@@ -700,7 +527,7 @@ class VpnController extends Controller
         $mikrotik = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
         $vpn = Vpn::where('ipaddress', $mikrotik->ipmikrotik)->first();
 
-        if (!$mikrotik) {
+        if (! $mikrotik) {
             return redirect()->back()->with('error', 'Mikrotik tidak ditemukan.');
         }
 
@@ -725,7 +552,7 @@ class VpnController extends Controller
 
             $sudahAda = $aakun->contains('namaakun', $namaakun);
 
-            if (!$sudahAda) {
+            if (! $sudahAda) {
                 Akun::create([
                     'namaakun' => $namaakun,
                     'site' => $mikrotik->site,
@@ -740,13 +567,13 @@ class VpnController extends Controller
     {
         $data = Mikrotik::where('ipmikrotik', $ipmikrotik)->first();
         $datavpn = Vpn::where('ipaddress', $data->ipmikrotik)->first();
-        if (!$data) {
+        if (! $data) {
             return response()->json(['error' => 'Data MikroTik tidak ditemukan.']);
         }
 
         try {
             $client = new Client([
-                'host' => env('MIKROTIK_CHOST') . ":" . $datavpn->portapi, // Menggunakan domain VPN dan port API dari data VPN
+                'host' => env('MIKROTIK_CHOST').':'.$datavpn->portapi, // Menggunakan domain VPN dan port API dari data VPN
 
                 'user' => $data->username,
                 'pass' => $data->password,
@@ -762,9 +589,10 @@ class VpnController extends Controller
                 return response()->json(['error' => 'Uptime tidak ditemukan.']);
             }
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Gagal terhubung ke MikroTik: ' . $e->getMessage()]);
+            return response()->json(['error' => 'Gagal terhubung ke MikroTik: '.$e->getMessage()]);
         }
     }
+
     public function addFirewallRule(Request $request)
     {
         $request->validate([
@@ -781,7 +609,7 @@ class VpnController extends Controller
         $data = Mikrotik::where('ipmikrotik', $request->ipmikrotik)->first();
 
         // Cek apakah data MikroTik ditemukan
-        if (!$data) {
+        if (! $data) {
             return redirect()->back()->with('error', 'MikroTik data not found.');
         }
 
@@ -793,7 +621,7 @@ class VpnController extends Controller
         $datavpn = Vpn::where('ipaddress', $data->ipmikrotik)->first();
 
         // Cek apakah data VPN ditemukan
-        if (!$datavpn) {
+        if (! $datavpn) {
             return redirect()->back()->with('error', 'VPN data not found.');
         }
 
@@ -804,7 +632,7 @@ class VpnController extends Controller
         try {
             // Konfigurasi client MikroTik API
             $config = [
-                'host' => env('MIKROTIK_CHOST') . ":" . $portapi,
+                'host' => env('MIKROTIK_CHOST').':'.$portapi,
                 'user' => $username,
                 'pass' => $password,
 
@@ -817,7 +645,7 @@ class VpnController extends Controller
                 ->where('dst-port', $portweb);
             $existingRules = $client->query($query)->read();
 
-            if (!empty($existingRules)) {
+            if (! empty($existingRules)) {
                 // Update aturan NAT yang sudah ada
                 $id = $existingRules[0]['.id'];
                 $updateQuery = (new Query('/ip/firewall/nat/set'))
@@ -863,7 +691,7 @@ class VpnController extends Controller
         $data = Mikrotik::where('ipmikrotik', $request->ipmikrotik)->first();
 
         // Cek apakah data MikroTik ditemukan
-        if (!$data) {
+        if (! $data) {
             return redirect()->back()->with('error', 'MikroTik data not found.');
         }
 
@@ -875,7 +703,7 @@ class VpnController extends Controller
         $datavpn = Vpn::where('ipaddress', $data->ipmikrotik)->first();
 
         // Cek apakah data VPN ditemukan
-        if (!$datavpn) {
+        if (! $datavpn) {
             return redirect()->back()->with('error', 'VPN data not found.');
         }
 
@@ -885,7 +713,7 @@ class VpnController extends Controller
         try {
             // MikroTik API client configuration
             $config = [
-                'host' => env('MIKROTIK_CHOST') . ":" . $portapi,
+                'host' => env('MIKROTIK_CHOST').':'.$portapi,
                 'user' => $username,
                 'pass' => $password,
 
@@ -908,16 +736,16 @@ class VpnController extends Controller
 
                 $result = $client->query($removeQuery)->read();
 
-                if (!isset($result['!trap'])) {
+                if (! isset($result['!trap'])) {
                     return response()->json(['success' => true, 'message' => 'PPPoE connection removed successfully.']);
                 } else {
-                    return response()->json(['success' => false, 'message' => 'Failed to remove PPPoE connection: ' . $result['!trap'][0]['message']]);
+                    return response()->json(['success' => false, 'message' => 'Failed to remove PPPoE connection: '.$result['!trap'][0]['message']]);
                 }
             } else {
                 return response()->json(['success' => false, 'message' => "PPPoE connection with IP address '$ipAddress' not found."]);
             }
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'An error occurred: ' . $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'An error occurred: '.$e->getMessage()]);
         }
     }
 
@@ -931,11 +759,11 @@ class VpnController extends Controller
             ->where('unique_id', auth()->user()->unique_id)
             ->first();
 
-        if (!$data) {
+        if (! $data) {
             return response()->json(['error' => 'Data MikroTik tidak ditemukan.'], 404);
         }
 
-        if (!$datavpn) {
+        if (! $datavpn) {
             return response()->json(['error' => 'Data VPN tidak ditemukan.'], 404);
         }
 
@@ -943,14 +771,14 @@ class VpnController extends Controller
 
         try {
             $client = new Client([
-                'host' => env('MIKROTIK_HOST') . ":" . $portapi,
+                'host' => env('MIKROTIK_HOST').':'.$portapi,
                 'user' => $data->username,
                 'pass' => $data->password,
 
             ]);
 
             $queryTraffic = (new Query('/interface/monitor-traffic'))
-                ->equal('interface', "<pppoe-" . $interfaceName . ">")
+                ->equal('interface', '<pppoe-'.$interfaceName.'>')
                 ->equal('once', true);
 
             $responseTraffic = $client->query($queryTraffic)->read();
@@ -966,9 +794,10 @@ class VpnController extends Controller
 
             return response()->json(['traffic' => $traffic]);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Gagal terhubung ke MikroTik: ' . $e->getMessage()], 500);
+            return response()->json(['error' => 'Gagal terhubung ke MikroTik: '.$e->getMessage()], 500);
         }
     }
+
     public function tambaholt(Request $req)
     {
         $ipolt = $req->input('ipolt');
@@ -980,22 +809,22 @@ class VpnController extends Controller
         $availablePort = null;
 
         for ($port = 44001; $port <= 44999; $port++) {
-            if (!in_array($port, $usedPorts)) {
+            if (! in_array($port, $usedPorts)) {
                 $availablePort = $port;
                 break;
             }
         }
 
         // Jika tidak ada port tersedia
-        if (!$availablePort) {
-            session()->flash('error', "Semua port antara 44001 dan 44999 telah terpakai.");
+        if (! $availablePort) {
+            session()->flash('error', 'Semua port antara 44001 dan 44999 telah terpakai.');
+
             return redirect()->back();
         }
 
         $portvpn = $availablePort;
 
-
-        //dd($site, $ipolt ,$ipolt, $ipvpn, $portvpn);
+        // dd($site, $ipolt ,$ipolt, $ipvpn, $portvpn);
 
         try {
             // Konfigurasi koneksi ke MikroTik
@@ -1006,18 +835,19 @@ class VpnController extends Controller
             ]);
 
             if (empty($ipolt) || empty($portolt) || empty($site) || empty($ipvpn)) {
-                session()->flash('error', "IP OLT, Port OLT, atau Site tidak boleh kosong.");
+                session()->flash('error', 'IP OLT, Port OLT, atau Site tidak boleh kosong.');
+
                 return redirect()->back();
             }
 
             // Mendapatkan data IP MikroTik berdasarkan site
             $ipmikrotik = Vpn::where('ipaddress', $ipvpn)->first();
 
-            if (!$ipmikrotik) {
+            if (! $ipmikrotik) {
                 session()->flash('error', "IP VPN $ipvpn tidak ditemukan.");
+
                 return redirect()->back();
             }
-
 
             // Tentukan aturan NAT untuk IP OLT
             $natQueryOLT = new Query('/ip/firewall/nat/add');
@@ -1028,13 +858,14 @@ class VpnController extends Controller
                 ->equal('action', 'dst-nat')
                 ->equal('to-addresses', $ipmikrotik->ipaddress)
                 ->equal('to-ports', $portvpn)
-                ->equal('comment', 'AQT_' . $site . '_OLT');
+                ->equal('comment', 'AQT_'.$site.'_OLT');
 
             $natResponseOLT = $client->query($natQueryOLT)->read();
 
             // Cek jika ada kesalahan dalam response NAT
             if (isset($natResponseOLT['!trap'])) {
                 session()->flash('error', $natResponseOLT['!trap'][0]['message']);
+
                 return redirect()->back();
             }
 
@@ -1048,21 +879,25 @@ class VpnController extends Controller
                 'site' => $site,
             ]);
 
-            session()->flash('success', "Konfigurasi OLT Berhasil Ditambahkan !");
+            session()->flash('success', 'Konfigurasi OLT Berhasil Ditambahkan !');
+
             return redirect()->back();
         } catch (ClientException $e) {
-            session()->flash('error', "Gagal terhubung ke MikroTik: " . $e->getMessage());
+            session()->flash('error', 'Gagal terhubung ke MikroTik: '.$e->getMessage());
+
             return redirect()->back();
         } catch (\Exception $e) {
-            session()->flash('error', "Terjadi kesalahan: " . $e->getMessage());
+            session()->flash('error', 'Terjadi kesalahan: '.$e->getMessage());
+
             return redirect()->back();
         }
     }
+
     public function hapusvpn(Request $request, $id)
     {
         $username = $request->input('username');
 
-        if (!$username) {
+        if (! $username) {
             return response()->json(['error' => 'Username is required.'], 400);
         }
 
@@ -1100,35 +935,76 @@ class VpnController extends Controller
             } else {
                 // return response()->json(['error' => 'PPP Secret not found.'], 404);
                 $vpn->delete();
+
                 return response()->json(['error' => 'PPP Secret not found. Database Delete!']);
 
             }
 
-            // Search for and remove Firewall NAT rules by name
-            $natComments = ['AQT_' . $username . '_API', 'AQT_' . $username . '_WEB', 'AQT_' . $username . '_MikroTik'];
-            foreach ($natComments as $comment) {
-                $query = new Query('/ip/firewall/nat/print');
-                $response = $client->query($query)->read();
+            // ============================
+            // HAPUS FIREWALL NAT BERDASARKAN COMMENT
+            // ============================
+            $natComments = [
+                'AQT_'.$username.'_API',
+                'AQT_'.$username.'_WEB',
+                'AQT_'.$username.'_MikroTik',
+            ];
 
-                foreach ($response as $rule) {
-                    if (isset($rule['comment']) && $rule['comment'] && $rule['comment'] === $comment) {
-                        $ruleId = $rule['.id'];
+            $queryNat = new Query('/ip/firewall/nat/print');
+            $responseNat = $client->query($queryNat)->read();
 
-                        $removeQuery = new Query('/ip/firewall/nat/remove');
-                        $removeQuery->equal('.id', $ruleId);
-                        $client->query($removeQuery)->read();
-                    }
+            foreach ($responseNat as $rule) {
+                if (! empty($rule['comment']) && in_array($rule['comment'], $natComments)) {
+                    $removeNat = new Query('/ip/firewall/nat/remove');
+                    $removeNat->equal('.id', $rule['.id']);
+                    $client->query($removeNat)->read();
                 }
             }
-            //Log::info();
+
+            // ============================
+            // HAPUS PPP SECRET & ACTIVE
+            // ============================
+
+            // Ambil semua PPP Secret sekali saja
+            $queryPPP = new Query('/ppp/secret/print');
+            $responsePPP = $client->query($queryPPP)->read();
+
+            $pppComment = 'AQT_'.$username;
+
+            // Hapus Secret
+            foreach ($responsePPP as $secret) {
+                $comment = $secret['comment'] ?? '';
+                $userPPP = $secret['name'] ?? '';
+
+                if ($comment === $pppComment || $userPPP === $username) {
+                    $removePPP = new Query('/ppp/secret/remove');
+                    $removePPP->equal('.id', $secret['.id']);
+                    $client->query($removePPP)->read();
+                }
+            }
+
+            // Ambil PPP Active terpisah setelah semua secret dihapus
+            $queryActive = new Query('/ppp/active/print');
+            $responseActive = $client->query($queryActive)->read();
+
+            // Hapus PPP Active user terkait
+            foreach ($responseActive as $active) {
+                if (($active['name'] ?? '') === $username) {
+                    $removeActive = new Query('/ppp/active/remove');
+                    $removeActive->equal('.id', $active['.id']);
+                    $client->query($removeActive)->read();
+                }
+            }
+
+            // Log::info();
             // Delete the VPN record from the database
             $vpn->delete();
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to delete PPP Secret or Firewall NAT rules: ' . $e->getMessage()], 500);
+            return response()->json(['error' => 'Failed to delete PPP Secret or Firewall NAT rules: '.$e->getMessage()], 500);
         }
 
         return response()->json(['success' => 'Data berhasil dihapus']);
     }
+
     public function hapusolt($id)
     {
         try {
@@ -1142,8 +1018,9 @@ class VpnController extends Controller
             // Cari data OLT di database berdasarkan ID
             $vpnData = OLT::find($id);
 
-            if (!$vpnData) {
-                session()->flash('error', "Data tidak ditemukan di database.");
+            if (! $vpnData) {
+                session()->flash('error', 'Data tidak ditemukan di database.');
+
                 return redirect()->back();
             }
 
@@ -1154,7 +1031,7 @@ class VpnController extends Controller
             $natRules = $client->query($findNatQuery)->read();
 
             // Hapus aturan NAT jika ditemukan
-            if (!empty($natRules)) {
+            if (! empty($natRules)) {
                 foreach ($natRules as $rule) {
                     if (isset($rule['.id'])) {
                         $deleteNatQuery = new Query('/ip/firewall/nat/remove');
@@ -1162,21 +1039,24 @@ class VpnController extends Controller
                         $client->query($deleteNatQuery)->read();
                     }
                 }
-                session()->flash('success', "Aturan NAT di MikroTik berhasil dihapus.");
+                session()->flash('success', 'Aturan NAT di MikroTik berhasil dihapus.');
             } else {
-                session()->flash('warning', "Aturan NAT tidak ditemukan di MikroTik.");
+                session()->flash('warning', 'Aturan NAT tidak ditemukan di MikroTik.');
             }
 
             // Hapus data dari database
             $vpnData->delete();
 
-            session()->flash('success', "Data berhasil dihapus dari database.");
+            session()->flash('success', 'Data berhasil dihapus dari database.');
+
             return redirect()->back();
         } catch (ClientException $e) {
-            session()->flash('error', "Gagal terhubung ke MikroTik: " . $e->getMessage());
+            session()->flash('error', 'Gagal terhubung ke MikroTik: '.$e->getMessage());
+
             return redirect()->back();
         } catch (\Exception $e) {
-            session()->flash('error', "Terjadi kesalahan: " . $e->getMessage());
+            session()->flash('error', 'Terjadi kesalahan: '.$e->getMessage());
+
             return redirect()->back();
         }
     }
@@ -1208,88 +1088,86 @@ class VpnController extends Controller
             return redirect()->back()->with('success', 'Data OLT berhasil diperbarui.');
         } catch (\Exception $e) {
             // Redirect dengan pesan error
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat memperbarui data OLT: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Terjadi kesalahan saat memperbarui data OLT: '.$e->getMessage());
         }
     }
+
     public function statusPage(Request $request)
-{
-    $data = Vpn::get();
-    $mikrotik = Mikrotik::get();
-    $olt = OLT::get();
+    {
+        $data = Vpn::get();
+        $mikrotik = Mikrotik::get();
+        $olt = OLT::get();
 
-    $ip = $request->query('ipmikrotik');
-    $interfaceName = $request->query('username');
+        $ip = $request->query('ipmikrotik');
+        $interfaceName = $request->query('username');
 
-    $dataMikrotik = Mikrotik::where('ipmikrotik', $ip)->first();
-    $datavpn = Vpn::where('ipaddress', $ip)->first();
+        $dataMikrotik = Mikrotik::where('ipmikrotik', $ip)->first();
+        $datavpn = Vpn::where('ipaddress', $ip)->first();
 
-    $uptime = null;
-    $ipAddress = null;
-    $macAddress = null;
+        $uptime = null;
+        $ipAddress = null;
+        $macAddress = null;
 
- 
+        if ($dataMikrotik && $datavpn && $interfaceName) {
+            try {
+                $client = new Client([
+                    'host' => env('MIKROTIK_CHOST').':'.$datavpn->portapi,
+                    'user' => $dataMikrotik->username,
+                    'pass' => $dataMikrotik->password,
+                ]);
 
-if ($dataMikrotik && $datavpn && $interfaceName) {
-    try {
-        $client = new Client([
-            'host' => env('MIKROTIK_CHOST') . ':' . $datavpn->portapi,
-            'user' => $dataMikrotik->username,
-            'pass' => $dataMikrotik->password,
-        ]);
+                // Ambil data dari /ppp/active/print
+                $pppQuery = (new Query('/ppp/active/print'))->where('name', $interfaceName);
+                $pppResponse = $client->query($pppQuery)->read();
 
-        // Ambil data dari /ppp/active/print
-        $pppQuery = (new Query('/ppp/active/print'))->where('name', $interfaceName);
-        $pppResponse = $client->query($pppQuery)->read();
+                if (! empty($pppResponse)) {
+                    $active = $pppResponse[0];
 
-        if (!empty($pppResponse)) {
-            $active = $pppResponse[0];
+                    $uptime = $active['uptime'] ?? null;
+                    $ipAddress = $active['address'] ?? null;
+                    $macAddress = $active['caller-id'] ?? null; // ini adalah MAC address
+                }
 
-            $uptime = $active['uptime'] ?? null;
-            $ipAddress = $active['address'] ?? null;
-            $macAddress = $active['caller-id'] ?? null; // ini adalah MAC address
+            } catch (\Exception $e) {
+                \Log::error('Gagal mengambil data PPPoE active: '.$e->getMessage());
+            }
         }
 
-    } catch (\Exception $e) {
-        \Log::error('Gagal mengambil data PPPoE active: ' . $e->getMessage());
-    }
-}
-
-
-    return view('Dashboard.depan.mikrotik.traffic', compact(
-        'ip', 'interfaceName', 'uptime', 'ipAddress', 'macAddress', 'data', 'mikrotik', 'olt', 'dataMikrotik'
-    ));
-}
-
-
-   public function getTrafficFromIp(Request $request)
-{
-    $ip = $request->input('ipmikrotik');
-    $username = $request->input('username');
-
-    \Log::info("Minta traffic untuk IP: $ip, Username: $username");
-
-    $dataMikrotik = Mikrotik::where('ipmikrotik', $ip)->first();
-    $datavpn = Vpn::where('ipaddress', $ip)->first();
-
-    if (!$dataMikrotik || !$datavpn) {
-        \Log::error("Data Mikrotik atau VPN tidak ditemukan untuk IP: $ip");
-        return response()->json(['error' => 'Data Mikrotik atau VPN tidak ditemukan'], 404);
+        return view('Dashboard.depan.mikrotik.traffic', compact(
+            'ip', 'interfaceName', 'uptime', 'ipAddress', 'macAddress', 'data', 'mikrotik', 'olt', 'dataMikrotik'
+        ));
     }
 
-    try {
+    public function getTrafficFromIp(Request $request)
+    {
+        $ip = $request->input('ipmikrotik');
+        $username = $request->input('username');
+
+        \Log::info("Minta traffic untuk IP: $ip, Username: $username");
+
+        $dataMikrotik = Mikrotik::where('ipmikrotik', $ip)->first();
+        $datavpn = Vpn::where('ipaddress', $ip)->first();
+
+        if (! $dataMikrotik || ! $datavpn) {
+            \Log::error("Data Mikrotik atau VPN tidak ditemukan untuk IP: $ip");
+
+            return response()->json(['error' => 'Data Mikrotik atau VPN tidak ditemukan'], 404);
+        }
+
+        try {
             $client = new Client([
-                'host' => env('MIKROTIK_CHOST').":". $datavpn->portapi,
+                'host' => env('MIKROTIK_CHOST').':'.$datavpn->portapi,
                 'user' => $dataMikrotik->username,
                 'pass' => $dataMikrotik->password,
             ]);
 
             $response = $client->query(
                 (new Query('/interface/monitor-traffic'))
-                    ->equal('interface', "<pppoe-" . $username . ">")
+                    ->equal('interface', '<pppoe-'.$username.'>')
                     ->equal('once')
             )->read();
 
-            if (empty($response) || !isset($response[0]['tx-bits-per-second'], $response[0]['rx-bits-per-second'])) {
+            if (empty($response) || ! isset($response[0]['tx-bits-per-second'], $response[0]['rx-bits-per-second'])) {
                 return response()->json(['error' => 'Tidak dapat mengambil data traffic'], 500);
             }
 
@@ -1298,8 +1176,7 @@ if ($dataMikrotik && $datavpn && $interfaceName) {
                 'rx' => (int) ($response[0]['rx-bits-per-second'] ?? 0),
             ]);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Terjadi kesalahan: ' . $e->getMessage()], 500);
+            return response()->json(['error' => 'Terjadi kesalahan: '.$e->getMessage()], 500);
         }
-}
-
+    }
 }
