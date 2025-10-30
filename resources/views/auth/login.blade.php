@@ -25,6 +25,7 @@
 
     body {
       background-color: #111;
+      background-image: url('{{ asset('dist/img/bg.jpg') }}');
       background-size: cover;
       background-position: center;
       width: 100%;
@@ -67,8 +68,7 @@
   </style>
 </head>
 
-<body class="hold-transition login-page loading text-white"
-      data-bg="{{ asset('dist/img/bg.jpg') }}">
+<body class="hold-transition login-page loading text-white">
 
   <div class="login-box">
     <div class="card card-outline card-primary glass-card text-white">
@@ -147,22 +147,11 @@
     window.addEventListener('load', setFullHeight);
     setFullHeight(); // jalankan langsung
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const body = document.body;
-      const bgUrl = body.getAttribute('data-bg');
-
-      // lazyload background image
-      const img = new Image();
-      img.src = bgUrl;
-      img.loading = 'lazy';
-      img.onload = () => {
-        body.style.backgroundImage = `url('${bgUrl}')`;
-
-        // beri delay supaya blur terlihat halus
-        setTimeout(() => {
-          body.classList.remove('loading');
-        }, 500);
-      };
+    // hilangkan blur setelah body siap
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        document.body.classList.remove('loading');
+      }, 300);
     });
   </script>
 
