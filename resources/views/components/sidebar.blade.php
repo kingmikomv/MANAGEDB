@@ -1,124 +1,147 @@
-<aside class="main-sidebar sidebar-dark-primary elevation-4">
-    <!-- Brand Logo -->
-    <a href="index3.html" class="brand-link">
-        <img src="https://us.123rf.com/450wm/mopc95/mopc951609/mopc95160900019/65023633-abstract-red-letter-m-logo-design-template-icon-shape-element-you-can-use-logotype-in-energy.jpg"
-            alt="AdminLTE Logo" class="brand-image img-circle elevation-3" style="opacity: .8">
-        <span class="brand-text font-weight-light">MANAGE DB</span>
-    </a>
+<!DOCTYPE html>
+<html lang="en">
+<x-head />
 
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <!-- Sidebar user panel -->
-        <div class="user-panel mt-3 pb-3 mb-3 d-flex">
-            <div class="image">
-                <img src="https://cdn-icons-png.freepik.com/512/1794/1794749.png" class="img-circle elevation-2"
-                    alt="User Image">
+<body class="hold-transition dark-mode sidebar-mini layout-fixed layout-navbar-fixed layout-footer-fixed">
+<div class="wrapper">
+    <x-nav />
+    <x-sidebar :mikrotik="$mikrotik" :olt="$olt" />
+
+    <div class="content-wrapper">
+        <section class="content">
+            <div class="container-fluid">
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title">Tambah Modem</h5>
+                            </div>
+
+                            <div class="card-body text-center">
+                                <p class="mb-3">Arahkan kamera ke QR Code di modem atau gunakan alat scanner barcode USB.</p>
+
+                                <!-- AREA SCANNER KAMERA -->
+                                <div id="reader" 
+                                    style="width:300px; height:300px; margin:auto; border:2px solid #555; border-radius:10px;">
+                                </div>
+
+                                <div class="mt-3">
+                                    <button id="startScan" class="btn btn-success">Mulai Kamera</button>
+                                    <button id="stopScan" class="btn btn-danger d-none">Stop Kamera</button>
+                                </div>
+
+                                <hr class="my-4">
+
+                                <!-- ALTERNATIF: SCAN DENGAN SCANNER BARCODE USB -->
+                                <h6>Atau Scan Pakai Alat Barcode (USB)</h6>
+                                <input type="text" id="barcodeInput" class="form-control text-center"
+                                       placeholder="Arahkan scanner barcode ke sini" autofocus>
+
+                                <div id="result" class="alert alert-info mt-4 d-none"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
-            <div class="info">
-                <a href="#" class="d-block">{{ Auth()->user()->name }}</a>
-            </div>
-        </div>
-
-        <!-- Sidebar Menu -->
-        <nav class="mt-2">
-            <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
-
-                <!-- Static Link -->
-                <li class="nav-item">
-                    <a href="{{ route('vpn.index') }}" class="nav-link">
-                        <i class="nav-icon fas fa-th"></i>
-                        <p>Network <span class="right badge badge-danger">New</span></p>
-                    </a>
-                </li>
-
-                <!-- Section Header -->
-                <li class="nav-header">TOOLS</li>
-
-                <!-- MikroTik Treeview -->
-                <li class="nav-item has-treeview">
-                    <a href="#" class="nav-link">
-                        <i class="nav-icon fas fa-sitemap"></i>
-                        <p>
-                            MikroTik
-                            <i class="fas fa-angle-left right"></i>
-                        </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                        @foreach ($mikrotik as $listmikrotik)
-                            <li class="nav-item">
-                                <a href="{{ route('masukmikrotik', [
-                                    'ipmikrotik' => $listmikrotik->ipmikrotik,
-                                    'portweb' => $listmikrotik->portweb,
-                                ]) }}" class="nav-link">
-                                    <i class="fas fa-server nav-icon"></i>
-                                    <p>{{ $listmikrotik->site }}</p>
-                                </a>
-                            </li>
-                        @endforeach
-                    </ul>
-                </li>
-
-                <!-- OLT Treeview -->
-                <li class="nav-item has-treeview">
-                    <a href="#" class="nav-link">
-                        <i class="nav-icon fas fa-clone"></i>
-                        <p>
-                            OLT
-                            <i class="fas fa-angle-left right"></i>
-                        </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                        @foreach ($olt as $listolt)
-                            <li class="nav-item">
-                                <a href="{{ 'http://akses.aqtnetwork.my.id:' . $listolt->portvpn }}" target="_blank" class="nav-link">
-                                    <i class="far fa-circle nav-icon"></i>
-                                    <p>{{ $listolt->site }}</p>
-                                </a>
-                            </li>
-                        @endforeach
-                    </ul>
-                </li>
-                
-
-                <li class="nav-item has-treeview">
-                    <a href="#" class="nav-link">
-                        <i class="nav-icon fas fa-clone"></i>
-                        <p>
-                            Modem
-                            <i class="fas fa-angle-left right"></i>
-                        </p>
-                    </a>
-                    <ul class="nav nav-treeview">
-                        
-                            <li class="nav-item">
-                                <a href="{{ route('modem.tambahmodem') }}" target="_blank" class="nav-link">
-                                    <i class="far fa-circle nav-icon"></i>
-                                    <p>Tambah Modem</p>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="" target="_blank" class="nav-link">
-                                    <i class="far fa-circle nav-icon"></i>
-                                    <p>Data Modem</p>
-                                </a>
-                            </li>
-                      
-                    </ul>
-                </li>
-                <!-- Logout -->
-                <li class="nav-item">
-                    <a href="#" class="nav-link" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-                        <i class="nav-icon fas fa-door-open"></i>
-                        <p>Logout</p>
-                    </a>
-                    <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
-                        @csrf
-                    </form>
-                </li>
-
-            </ul>
-        </nav>
-        <!-- /.sidebar-menu -->
+        </section>
     </div>
-    <!-- /.sidebar -->
-</aside>
+
+    <x-footer />
+</div>
+
+<x-script />
+
+<!-- Library QR Scanner -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
+
+<script>
+    let reader;
+    let isScanning = false;
+    const resultDiv = document.getElementById("result");
+    const barcodeInput = document.getElementById("barcodeInput");
+    const startButton = document.getElementById("startScan");
+    const stopButton = document.getElementById("stopScan");
+
+    // Fungsi tampil hasil
+    function showResult(text) {
+        resultDiv.classList.remove("d-none");
+        resultDiv.innerHTML = `<b>SN / Kode Modem:</b> ${text}`;
+        console.log("QR/Barcode detected:", text);
+
+        // Kirim ke server (opsional)
+        fetch("", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-TOKEN": "{{ csrf_token() }}"
+            },
+            body: JSON.stringify({ kode_modem: text })
+        })
+        .then(res => res.json())
+        .then(data => console.log("Server response:", data))
+        .catch(err => console.error(err));
+    }
+
+    // Fungsi mulai kamera
+    function startCamera() {
+        if (isScanning) return;
+
+        reader = new Html5Qrcode("reader");
+        isScanning = true;
+        startButton.classList.add("d-none");
+        stopButton.classList.remove("d-none");
+
+        reader.start(
+            { facingMode: "environment" },
+            {
+                fps: 30,       // lebih responsif
+                qrbox: 300,    // area scan lebih besar
+                aspectRatio: 1.0,
+                disableFlip: true
+            },
+            decodedText => {
+                if (decodedText) {
+                    showResult(decodedText);
+                    stopCamera();
+                }
+            },
+            error => {
+                // tetap scanning
+            }
+        ).catch(err => {
+            alert("❌ Gagal membuka kamera: " + err);
+            isScanning = false;
+            startButton.classList.remove("d-none");
+            stopButton.classList.add("d-none");
+        });
+    }
+
+    // Fungsi stop kamera
+    function stopCamera() {
+        if (reader && isScanning) {
+            reader.stop().then(() => {
+                console.log("Kamera dimatikan.");
+            }).catch(err => console.error(err));
+        }
+        isScanning = false;
+        startButton.classList.remove("d-none");
+        stopButton.classList.add("d-none");
+    }
+
+    // Tombol event
+    startButton.addEventListener("click", startCamera);
+    stopButton.addEventListener("click", stopCamera);
+
+    // Input manual via alat barcode USB
+    barcodeInput.addEventListener("change", function () {
+        if (this.value.trim() !== "") {
+            showResult(this.value.trim());
+            this.value = "";
+        }
+    });
+</script>
+
+</body>
+</html>
