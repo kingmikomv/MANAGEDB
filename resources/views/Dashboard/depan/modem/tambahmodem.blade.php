@@ -21,12 +21,20 @@
                                 <p class="mb-3">Arahkan kamera ke QR Code modem</p>
 
                                 <!-- Area kamera -->
-                                <video id="preview" style="width:100%; max-width:400px; border-radius:10px; background:#000;"></video>
+                                <video id="preview"
+                                       style="width:100%; max-width:400px; border-radius:10px; background:#000;"
+                                       autoplay
+                                       muted
+                                       playsinline></video>
 
                                 <!-- Input fallback -->
                                 <div class="mt-4">
                                     <label for="serialNumber">Nomor Seri (SN):</label>
-                                    <input type="text" id="serialNumber" name="serialNumber" class="form-control text-center" placeholder="Scan QR atau ketik manual">
+                                    <input type="text"
+                                           id="serialNumber"
+                                           name="serialNumber"
+                                           class="form-control text-center"
+                                           placeholder="Scan QR atau ketik manual">
                                 </div>
 
                                 <button class="btn btn-success mt-3" onclick="submitSN()">Simpan</button>
@@ -43,54 +51,68 @@
 
 <x-script />
 
-<!-- Gunakan versi browser ZXing yang benar -->
-<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+<!-- ✅ Gunakan versi ZXing stabil -->
+<script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
 <script>
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", async function() {
     const videoElement = document.getElementById('preview');
     const serialInput = document.getElementById('serialNumber');
     const codeReader = new ZXing.BrowserMultiFormatReader();
+    let isDetected = false; // untuk mencegah pembacaan ganda
 
-    // Mulai kamera dan baca QR otomatis
-    codeReader
-        .listVideoInputDevices()
-        .then(videoInputDevices => {
-            if (videoInputDevices.length === 0) {
-                throw new Error("Tidak ada kamera yang terdeteksi");
+    try {
+        const devices = await codeReader.listVideoInputDevices();
+        if (devices.length === 0) {
+            throw new Error("Tidak ada kamera yang terdeteksi");
+        }
+
+        // Pilih kamera belakang kalau tersedia
+        const selectedDeviceId = devices.find(d => d.label.toLowerCase().includes("back"))?.deviceId || devices[devices.length - 1].deviceId;
+
+        console.log("Memulai kamera:", selectedDeviceId);
+
+        codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
+            if (result && !isDetected) {
+                isDetected = true;
+                const sn = result.text.trim();
+                serialInput.value = sn;
+                alert("✅ Nomor seri terbaca: " + sn);
+                codeReader.reset(); // stop kamera
             }
-
-            // Pilih kamera belakang (biasanya terakhir di list)
-            const selectedDeviceId = videoInputDevices.length > 1
-                ? videoInputDevices[videoInputDevices.length - 1].deviceId
-                : videoInputDevices[0].deviceId;
-
-            // Jalankan scanner realtime
-            codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
-                if (result) {
-                    serialInput.value = result.text;
-                    codeReader.reset(); // Hentikan kamera setelah terbaca
-                    alert("Nomor seri terbaca: " + result.text);
-                }
-            });
-        })
-        .catch(err => {
-            console.error("Gagal membuka kamera:", err);
-            videoElement.insertAdjacentHTML(
-                'afterend',
-                "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Silakan ketik SN manual.</p>"
-            );
         });
+    } catch (err) {
+        console.error("❌ Gagal membuka kamera:", err);
+        videoElement.insertAdjacentHTML(
+            'afterend',
+            "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Silakan ketik SN secara manual.</p>"
+        );
+    }
 });
 
 function submitSN() {
     const sn = document.getElementById("serialNumber").value.trim();
     if (!sn) {
-        alert("Nomor seri belum diisi.");
+        alert("⚠️ Nomor seri belum diisi.");
         return;
     }
-    alert("Nomor seri disimpan: " + sn);
-    // TODO: kirim ke controller Laravel via fetch('/tambahmodem', { method:'POST', body: JSON.stringify({ sn }) })
+
+    alert("💾 Nomor seri disimpan: " + sn);
+
+    // Contoh kirim ke Laravel pakai fetch:
+    /*
+    fetch('/tambahmodem', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ sn })
+    })
+    .then(res => res.json())
+    .then(data => console.log('Disimpan:', data))
+    .catch(console.error);
+    */
 }
 </script>
 
