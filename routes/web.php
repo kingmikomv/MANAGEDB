@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\ModemController;
 use App\Http\Controllers\VpnController;
 use Illuminate\Support\Facades\Route;
 
@@ -57,6 +58,10 @@ Route::prefix('/home/network')->controller(VpnController::class)->group(function
 
     Route::post('/monitoring/add-firewall-rule', 'addFirewallRule')->name('addFirewallRule');
     Route::post('/monitoring/restartmodem', 'restartmodem')->name('restartmodem');
+});
+
+Route::prefix('/home/modem')->controller(ModemController::class)->group(function(){
+    Route::get('/tambahmodem', 'tambahmodem')->name('modem.tambahmodem');
 });
 
 

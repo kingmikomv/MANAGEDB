@@ -78,7 +78,33 @@
                         @endforeach
                     </ul>
                 </li>
+                
 
+                <li class="nav-item has-treeview">
+                    <a href="#" class="nav-link">
+                        <i class="nav-icon fas fa-clone"></i>
+                        <p>
+                            Modem
+                            <i class="fas fa-angle-left right"></i>
+                        </p>
+                    </a>
+                    <ul class="nav nav-treeview">
+                        
+                            <li class="nav-item">
+                                <a href="{{ route('modem.tambahmodem') }}" target="_blank" class="nav-link">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Tambah Modem</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="" target="_blank" class="nav-link">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Data Modem</p>
+                                </a>
+                            </li>
+                      
+                    </ul>
+                </li>
                 <!-- Logout -->
                 <li class="nav-item">
                     <a href="#" class="nav-link" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
