@@ -18,7 +18,7 @@
                             </div>
 
                             <div class="card-body text-center">
-                                <p class="mb-3">Arahkan kamera ke QR Code modem</p>
+                                <p class="mb-3">Arahkan kamera ke QR Code modem atau unggah foto QR-nya</p>
 
                                 <!-- Area kamera -->
                                 <video id="preview"
@@ -26,6 +26,14 @@
                                        autoplay
                                        muted
                                        playsinline></video>
+
+                                <!-- Tombol upload foto -->
+                                <div class="mt-3">
+                                    <label for="qrImage" class="btn btn-primary">
+                                        <i class="fas fa-upload"></i> Unggah Gambar QR
+                                    </label>
+                                    <input type="file" id="qrImage" accept="image/*" style="display:none;">
+                                </div>
 
                                 <!-- Input fallback -->
                                 <div class="mt-4">
@@ -38,6 +46,8 @@
                                 </div>
 
                                 <button class="btn btn-success mt-3" onclick="submitSN()">Simpan</button>
+
+                                <canvas id="qrCanvas" style="display:none;"></canvas>
                             </div>
                         </div>
                     </div>
@@ -51,26 +61,24 @@
 
 <x-script />
 
-<!-- ✅ Gunakan versi ZXing stabil -->
+<!-- ✅ Gunakan ZXing versi stabil -->
 <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", async function() {
     const videoElement = document.getElementById('preview');
     const serialInput = document.getElementById('serialNumber');
+    const imageInput = document.getElementById('qrImage');
     const codeReader = new ZXing.BrowserMultiFormatReader();
-    let isDetected = false; // untuk mencegah pembacaan ganda
+    let isDetected = false;
 
+    // ===== SCAN DARI KAMERA =====
     try {
         const devices = await codeReader.listVideoInputDevices();
-        if (devices.length === 0) {
-            throw new Error("Tidak ada kamera yang terdeteksi");
-        }
+        if (devices.length === 0) throw new Error("Tidak ada kamera terdeteksi");
 
-        // Pilih kamera belakang kalau tersedia
-        const selectedDeviceId = devices.find(d => d.label.toLowerCase().includes("back"))?.deviceId || devices[devices.length - 1].deviceId;
-
-        console.log("Memulai kamera:", selectedDeviceId);
+        const selectedDeviceId = devices.find(d => d.label.toLowerCase().includes("back"))?.deviceId
+            || devices[devices.length - 1].deviceId;
 
         codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
             if (result && !isDetected) {
@@ -78,16 +86,45 @@ document.addEventListener("DOMContentLoaded", async function() {
                 const sn = result.text.trim();
                 serialInput.value = sn;
                 alert("✅ Nomor seri terbaca: " + sn);
-                codeReader.reset(); // stop kamera
+                codeReader.reset();
             }
         });
     } catch (err) {
-        console.error("❌ Gagal membuka kamera:", err);
+        console.error("❌ Kamera gagal diakses:", err);
         videoElement.insertAdjacentHTML(
             'afterend',
-            "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Silakan ketik SN secara manual.</p>"
+            "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Silakan ketik SN atau unggah QR.</p>"
         );
     }
+
+    // ===== SCAN DARI GAMBAR UPLOAD =====
+    imageInput.addEventListener("change", async function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const img = new Image();
+            img.onload = async function() {
+                const canvas = document.getElementById('qrCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0, img.width, img.height);
+
+                try {
+                    const result = await codeReader.decodeFromCanvas(canvas);
+                    const sn = result.text.trim();
+                    serialInput.value = sn;
+                    alert("✅ Nomor seri dari gambar: " + sn);
+                } catch (decodeErr) {
+                    alert("⚠️ Gagal membaca QR dari gambar. Pastikan QR jelas dan tidak buram.");
+                }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
 });
 
 function submitSN() {
@@ -99,7 +136,7 @@ function submitSN() {
 
     alert("💾 Nomor seri disimpan: " + sn);
 
-    // Contoh kirim ke Laravel pakai fetch:
+    // Contoh AJAX ke Laravel
     /*
     fetch('/tambahmodem', {
         method: 'POST',
@@ -110,7 +147,7 @@ function submitSN() {
         body: JSON.stringify({ sn })
     })
     .then(res => res.json())
-    .then(data => console.log('Disimpan:', data))
+    .then(data => Swal.fire('Berhasil', 'Data modem disimpan', 'success'))
     .catch(console.error);
     */
 }
