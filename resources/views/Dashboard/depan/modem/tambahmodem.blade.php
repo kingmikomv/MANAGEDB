@@ -18,7 +18,7 @@
                             </div>
 
                             <div class="card-body text-center">
-                                <p class="mb-3">Arahkan kamera ke QR Code modem atau unggah foto QR-nya</p>
+                                <p class="mb-3">Arahkan kamera ke QR Code atau Barcode modem, atau unggah foto-nya</p>
 
                                 <!-- Area kamera -->
                                 <video id="preview"
@@ -30,7 +30,7 @@
                                 <!-- Tombol upload foto -->
                                 <div class="mt-3">
                                     <label for="qrImage" class="btn btn-primary">
-                                        <i class="fas fa-upload"></i> Unggah Gambar QR
+                                        <i class="fas fa-upload"></i> Unggah Gambar QR / Barcode
                                     </label>
                                     <input type="file" id="qrImage" accept="image/*" style="display:none;">
                                 </div>
@@ -42,7 +42,7 @@
                                            id="serialNumber"
                                            name="serialNumber"
                                            class="form-control text-center"
-                                           placeholder="Scan QR atau ketik manual">
+                                           placeholder="Scan QR/Barcode atau ketik manual">
                                 </div>
 
                                 <button class="btn btn-success mt-3" onclick="submitSN()">Simpan</button>
@@ -61,30 +61,36 @@
 
 <x-script />
 
-<!-- ✅ Gunakan ZXing versi stabil -->
+<!-- ✅ ZXing library untuk QR + Barcode -->
 <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
+
+<!-- ✅ Beep sound -->
+<audio id="beep-sound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
 
 <script>
 document.addEventListener("DOMContentLoaded", async function() {
     const videoElement = document.getElementById('preview');
     const serialInput = document.getElementById('serialNumber');
     const imageInput = document.getElementById('qrImage');
+    const beep = document.getElementById('beep-sound');
     const codeReader = new ZXing.BrowserMultiFormatReader();
     let isDetected = false;
 
-    // ===== SCAN DARI KAMERA =====
+    // ======== SCAN DARI KAMERA ========
     try {
         const devices = await codeReader.listVideoInputDevices();
         if (devices.length === 0) throw new Error("Tidak ada kamera terdeteksi");
 
-        const selectedDeviceId = devices.find(d => d.label.toLowerCase().includes("back"))?.deviceId
-            || devices[devices.length - 1].deviceId;
+        const selectedDeviceId =
+            devices.find(d => d.label.toLowerCase().includes("back"))?.deviceId ||
+            devices[devices.length - 1].deviceId;
 
         codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
             if (result && !isDetected) {
                 isDetected = true;
                 const sn = result.text.trim();
                 serialInput.value = sn;
+                beep.play();
                 alert("✅ Nomor seri terbaca: " + sn);
                 codeReader.reset();
             }
@@ -93,11 +99,11 @@ document.addEventListener("DOMContentLoaded", async function() {
         console.error("❌ Kamera gagal diakses:", err);
         videoElement.insertAdjacentHTML(
             'afterend',
-            "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Silakan ketik SN atau unggah QR.</p>"
+            "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Silakan ketik SN atau unggah QR/Barcode.</p>"
         );
     }
 
-    // ===== SCAN DARI GAMBAR UPLOAD =====
+    // ======== SCAN DARI GAMBAR UPLOAD ========
     imageInput.addEventListener("change", async function(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -116,9 +122,10 @@ document.addEventListener("DOMContentLoaded", async function() {
                     const result = await codeReader.decodeFromCanvas(canvas);
                     const sn = result.text.trim();
                     serialInput.value = sn;
+                    beep.play();
                     alert("✅ Nomor seri dari gambar: " + sn);
                 } catch (decodeErr) {
-                    alert("⚠️ Gagal membaca QR dari gambar. Pastikan QR jelas dan tidak buram.");
+                    alert("⚠️ Gagal membaca QR/Barcode dari gambar. Pastikan jelas dan tidak buram.");
                 }
             };
             img.src = e.target.result;
@@ -136,7 +143,7 @@ function submitSN() {
 
     alert("💾 Nomor seri disimpan: " + sn);
 
-    // Contoh AJAX ke Laravel
+    // Contoh kirim ke Laravel
     /*
     fetch('/tambahmodem', {
         method: 'POST',
