@@ -17,25 +17,28 @@
                             <div class="card-header">
                                 <h5 class="card-title">Tambah Modem</h5>
                             </div>
+
                             <div class="card-body text-center">
+                                <p class="mb-3">Arahkan kamera ke QR Code di modem atau gunakan alat scanner barcode USB.</p>
 
-                                <!-- AREA SCAN -->
-                                <div id="reader" style="width:300px; margin:auto;"></div>
+                                <!-- AREA SCANNER KAMERA -->
+                                <div id="reader" 
+                                    style="width:300px; height:300px; margin:auto; border:2px solid #555; border-radius:10px;">
+                                </div>
 
-                                <hr class="my-4 text-secondary">
-
-                                <!-- INPUT ALTERNATIF (UNTUK SCANNER USB) -->
-                                <div class="form-group">
-                                    <label for="barcodeInput">Atau Scan pakai alat barcode (otomatis masuk sini):</label>
-                                    <input type="text" id="barcodeInput" class="form-control text-center"
-                                           placeholder="Arahkan scanner barcode ke sini" autofocus>
+                                <div class="mt-3">
+                                    <button id="startScan" class="btn btn-success">Mulai Kamera</button>
+                                    <button id="stopScan" class="btn btn-danger d-none">Stop Kamera</button>
                                 </div>
 
                                 <hr class="my-4">
 
-                                <div id="result" class="alert alert-info d-none"></div>
+                                <!-- ALTERNATIF: SCAN DENGAN SCANNER BARCODE USB -->
+                                <h6>Atau Scan Pakai Alat Barcode (USB)</h6>
+                                <input type="text" id="barcodeInput" class="form-control text-center"
+                                       placeholder="Arahkan scanner barcode ke sini" autofocus>
 
-                                <button id="stopScan" class="btn btn-danger mt-3">Stop Kamera</button>
+                                <div id="result" class="alert alert-info mt-4 d-none"></div>
                             </div>
                         </div>
                     </div>
@@ -50,20 +53,24 @@
 
 <x-script />
 
-<!-- Tambahkan library html5-qrcode -->
-<script src="https://unpkg.com/html5-qrcode"></script>
+<!-- Library QR Scanner -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
+
 <script>
-    const reader = new Html5Qrcode("reader");
+    let reader;
+    let isScanning = false;
     const resultDiv = document.getElementById("result");
-    const inputBarcode = document.getElementById("barcodeInput");
+    const barcodeInput = document.getElementById("barcodeInput");
+    const startButton = document.getElementById("startScan");
     const stopButton = document.getElementById("stopScan");
 
-    // Fungsi untuk menampilkan hasil
+    // Fungsi tampil hasil
     function showResult(text) {
         resultDiv.classList.remove("d-none");
-        resultDiv.innerHTML = "<b>QR / Barcode Terdeteksi:</b> " + text;
+        resultDiv.innerHTML = `<b>SN / Kode Modem:</b> ${text}`;
+        console.log("QR/Barcode detected:", text);
 
-        // Kirim ke server pakai AJAX (opsional)
+        // Kirim ke server (opsional)
         fetch("", {
             method: "POST",
             headers: {
@@ -73,39 +80,66 @@
             body: JSON.stringify({ kode_modem: text })
         })
         .then(res => res.json())
-        .then(data => console.log(data))
+        .then(data => console.log("Server response:", data))
         .catch(err => console.error(err));
     }
 
-    // Jalankan scanner kamera
-    reader.start(
-        { facingMode: "environment" },
-        {
-            fps: 10,
-            qrbox: 250
-        },
-        (decodedText) => {
-            showResult(decodedText);
-            reader.stop(); // otomatis berhenti setelah scan sukses
-        },
-        (error) => {
-            // bisa diabaikan
+    // Fungsi mulai kamera
+    function startCamera() {
+        if (isScanning) return;
+
+        reader = new Html5Qrcode("reader");
+        isScanning = true;
+        startButton.classList.add("d-none");
+        stopButton.classList.remove("d-none");
+
+        reader.start(
+            { facingMode: "environment" },
+            {
+                fps: 30,       // lebih responsif
+                qrbox: 300,    // area scan lebih besar
+                aspectRatio: 1.0,
+                disableFlip: true
+            },
+            decodedText => {
+                if (decodedText) {
+                    showResult(decodedText);
+                    stopCamera();
+                }
+            },
+            error => {
+                // tetap scanning
+            }
+        ).catch(err => {
+            alert("❌ Gagal membuka kamera: " + err);
+            isScanning = false;
+            startButton.classList.remove("d-none");
+            stopButton.classList.add("d-none");
+        });
+    }
+
+    // Fungsi stop kamera
+    function stopCamera() {
+        if (reader && isScanning) {
+            reader.stop().then(() => {
+                console.log("Kamera dimatikan.");
+            }).catch(err => console.error(err));
         }
-    ).catch(err => {
-        alert("Gagal membuka kamera: " + err);
-    });
+        isScanning = false;
+        startButton.classList.remove("d-none");
+        stopButton.classList.add("d-none");
+    }
 
-    // Untuk scanner barcode fisik (input text)
-    inputBarcode.addEventListener("change", function () {
-        showResult(this.value);
-        this.value = ""; // reset
-    });
+    // Tombol event
+    startButton.addEventListener("click", startCamera);
+    stopButton.addEventListener("click", stopCamera);
 
-    // Tombol stop kamera
-    stopButton.addEventListener("click", function () {
-        reader.stop().then(() => {
-            alert("Kamera dimatikan");
-        }).catch(err => console.error(err));
+    // Input manual via alat barcode USB
+    barcodeInput.addEventListener("change", function () {
+        if (this.value.trim() !== "") {
+            showResult(this.value.trim());
+            this.value = "";
+        }
     });
 </script>
 
