@@ -18,19 +18,21 @@
                             </div>
 
                             <div class="card-body text-center">
-                                <p class="mb-3">Arahkan kamera ke QR / Barcode modem atau upload fotonya</p>
+                                <p class="mb-3">Scan QR / Barcode modem untuk membaca SN</p>
 
-                                <!-- Kamera -->
-                                <video id="preview" style="width:100%; max-width:400px; border-radius:10px; background:#000;"></video>
+                                <!-- Area kamera -->
+                                <video id="preview" autoplay muted playsinline style="width:100%; max-width:400px; border-radius:10px; background:#000;"></video>
 
+                                <!-- Upload gambar QR -->
                                 <div class="mt-3">
-                                    <input type="file" id="fileInput" accept="image/*" class="form-control-file mt-2">
+                                    <label class="form-label">Atau upload foto QR/Barcode:</label>
+                                    <input type="file" id="qrFile" accept="image/*" class="form-control" onchange="decodeImageFile(this)">
                                 </div>
 
-                                <!-- Input fallback -->
+                                <!-- Input SN -->
                                 <div class="mt-4">
                                     <label for="serialNumber">Nomor Seri (SN):</label>
-                                    <input type="text" id="serialNumber" name="serialNumber" class="form-control text-center" placeholder="Scan QR / Barcode atau ketik manual">
+                                    <input type="text" id="serialNumber" name="serialNumber" class="form-control text-center" placeholder="Scan atau ketik manual">
                                 </div>
 
                                 <button class="btn btn-success mt-3" onclick="submitSN()">Simpan</button>
@@ -47,64 +49,98 @@
 
 <x-script />
 
+<!-- Library ZXing -->
 <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+
 <script>
 document.addEventListener("DOMContentLoaded", function() {
     const videoElement = document.getElementById('preview');
     const serialInput = document.getElementById('serialNumber');
-    const fileInput = document.getElementById('fileInput');
     const codeReader = new ZXing.BrowserMultiFormatReader();
 
-    // Jalankan kamera
-    codeReader.listVideoInputDevices().then(videoInputDevices => {
-        if (videoInputDevices.length === 0) throw new Error("Tidak ada kamera");
-
-        const selectedDeviceId = videoInputDevices.length > 1
-            ? videoInputDevices[videoInputDevices.length - 1].deviceId
-            : videoInputDevices[0].deviceId;
-
-        codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
-            if (result) {
-                handleResult(result.text);
-                codeReader.reset();
+    // 🔹 Mulai kamera & scan otomatis
+    codeReader
+        .listVideoInputDevices()
+        .then(videoInputDevices => {
+            if (videoInputDevices.length === 0) {
+                throw new Error("Tidak ada kamera yang terdeteksi");
             }
+
+            const selectedDeviceId = videoInputDevices.length > 1
+                ? videoInputDevices[videoInputDevices.length - 1].deviceId
+                : videoInputDevices[0].deviceId;
+
+            // Jalankan scanner realtime
+            codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
+                if (result) {
+                    serialInput.value = result.text;
+                    codeReader.reset(); // stop kamera setelah berhasil
+                    alert("Nomor seri terbaca: " + result.text);
+                }
+            });
+        })
+        .catch(err => {
+            console.error("Gagal membuka kamera:", err);
+            videoElement.insertAdjacentHTML('afterend', "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Gunakan upload foto QR.</p>");
         });
-    }).catch(err => {
-        console.error("Gagal buka kamera:", err);
-    });
-
-    // Deteksi upload gambar QR/barcode
-    fileInput.addEventListener("change", async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const imgURL = URL.createObjectURL(file);
-        try {
-            const result = await codeReader.decodeFromImageUrl(imgURL);
-            handleResult(result.text);
-        } catch (err) {
-            alert("Gagal membaca QR/barcode dari gambar. Pastikan gambar jelas.");
-            console.error(err);
-        } finally {
-            URL.revokeObjectURL(imgURL);
-        }
-    });
-
-    function handleResult(text) {
-        serialInput.value = text;
-        alert("Terbaca: " + text);
-    }
 });
 
+// 🔹 Fungsi baca QR dari file upload
+function decodeImageFile(input) {
+    if (input.files.length === 0) return;
+
+    const file = input.files[0];
+    const reader = new FileReader();
+    const serialInput = document.getElementById('serialNumber');
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+
+    reader.onload = function() {
+        const img = new Image();
+        img.onload = function() {
+            codeReader.decodeFromImage(img)
+                .then(result => {
+                    serialInput.value = result.text;
+                    alert("Nomor seri terbaca: " + result.text);
+                })
+                .catch(() => {
+                    alert("Gagal membaca QR/barcode dari gambar.");
+                });
+        };
+        img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+// 🔹 Fungsi simpan ke backend Laravel
 function submitSN() {
     const sn = document.getElementById("serialNumber").value.trim();
     if (!sn) {
         alert("Nomor seri belum diisi.");
         return;
     }
-    alert("Nomor seri disimpan: " + sn);
-    // TODO: fetch('/tambahmodem', { method:'POST', body: JSON.stringify({ sn }) })
+
+    // Kirim ke backend Laravel via AJAX
+    fetch("", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-TOKEN": "{{ csrf_token() }}"
+        },
+        body: JSON.stringify({ sn })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert("Modem berhasil disimpan!");
+        } else {
+            alert("Gagal menyimpan modem: " + data.message);
+        }
+    })
+    .catch(err => {
+        alert("Terjadi kesalahan koneksi: " + err);
+    });
 }
 </script>
+
 </body>
 </html>
