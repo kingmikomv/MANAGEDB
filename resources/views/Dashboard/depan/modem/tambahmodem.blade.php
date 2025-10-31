@@ -5,12 +5,11 @@
 <body class="hold-transition dark-mode sidebar-mini layout-fixed layout-navbar-fixed layout-footer-fixed">
 <div class="wrapper">
     <x-nav />
-    <x-sidebar :mikrotik="$mikrotik" :olt="$olt" />
+    <x-sidebar :mikrotik="$mikrotik" :olt="$olt"/>
 
     <div class="content-wrapper">
         <section class="content">
             <div class="container-fluid">
-
                 <div class="row">
                     <div class="col-md-12">
                         <div class="card">
@@ -19,31 +18,22 @@
                             </div>
 
                             <div class="card-body text-center">
-                                <p class="mb-3">Arahkan kamera ke QR Code di modem atau gunakan alat scanner barcode USB.</p>
+                                <p class="mb-3">Arahkan kamera ke QR Code modem</p>
 
-                                <!-- AREA SCANNER KAMERA -->
-                                <div id="reader" 
-                                    style="width:300px; height:300px; margin:auto; border:2px solid #555; border-radius:10px;">
+                                <!-- Area kamera -->
+                                <video id="preview" style="width:100%; max-width:400px; border-radius:10px; background:#000;"></video>
+
+                                <!-- Input fallback -->
+                                <div class="mt-4">
+                                    <label for="serialNumber">Nomor Seri (SN):</label>
+                                    <input type="text" id="serialNumber" name="serialNumber" class="form-control text-center" placeholder="Scan QR atau ketik manual">
                                 </div>
 
-                                <div class="mt-3">
-                                    <button id="startScan" class="btn btn-success">Mulai Kamera</button>
-                                    <button id="stopScan" class="btn btn-danger d-none">Stop Kamera</button>
-                                </div>
-
-                                <hr class="my-4">
-
-                                <!-- ALTERNATIF: SCAN DENGAN SCANNER BARCODE USB -->
-                                <h6>Atau Scan Pakai Alat Barcode (USB)</h6>
-                                <input type="text" id="barcodeInput" class="form-control text-center"
-                                       placeholder="Arahkan scanner barcode ke sini" autofocus>
-
-                                <div id="result" class="alert alert-info mt-4 d-none"></div>
+                                <button class="btn btn-success mt-3" onclick="submitSN()">Simpan</button>
                             </div>
                         </div>
                     </div>
                 </div>
-
             </div>
         </section>
     </div>
@@ -53,94 +43,55 @@
 
 <x-script />
 
-<!-- Library QR Scanner -->
-<script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
+<!-- Gunakan versi browser ZXing yang benar -->
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
 
 <script>
-    let reader;
-    let isScanning = false;
-    const resultDiv = document.getElementById("result");
-    const barcodeInput = document.getElementById("barcodeInput");
-    const startButton = document.getElementById("startScan");
-    const stopButton = document.getElementById("stopScan");
+document.addEventListener("DOMContentLoaded", function() {
+    const videoElement = document.getElementById('preview');
+    const serialInput = document.getElementById('serialNumber');
+    const codeReader = new ZXing.BrowserMultiFormatReader();
 
-    // Fungsi tampil hasil
-    function showResult(text) {
-        resultDiv.classList.remove("d-none");
-        resultDiv.innerHTML = `<b>SN / Kode Modem:</b> ${text}`;
-        console.log("QR/Barcode detected:", text);
-
-        // Kirim ke server (opsional)
-        fetch("", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRF-TOKEN": "{{ csrf_token() }}"
-            },
-            body: JSON.stringify({ kode_modem: text })
-        })
-        .then(res => res.json())
-        .then(data => console.log("Server response:", data))
-        .catch(err => console.error(err));
-    }
-
-    // Fungsi mulai kamera
-    function startCamera() {
-        if (isScanning) return;
-
-        reader = new Html5Qrcode("reader");
-        isScanning = true;
-        startButton.classList.add("d-none");
-        stopButton.classList.remove("d-none");
-
-        reader.start(
-            { facingMode: "environment" },
-            {
-                fps: 30,       // lebih responsif
-                qrbox: 300,    // area scan lebih besar
-                aspectRatio: 1.0,
-                disableFlip: true
-            },
-            decodedText => {
-                if (decodedText) {
-                    showResult(decodedText);
-                    stopCamera();
-                }
-            },
-            error => {
-                // tetap scanning
+    // Mulai kamera dan baca QR otomatis
+    codeReader
+        .listVideoInputDevices()
+        .then(videoInputDevices => {
+            if (videoInputDevices.length === 0) {
+                throw new Error("Tidak ada kamera yang terdeteksi");
             }
-        ).catch(err => {
-            alert("❌ Gagal membuka kamera: " + err);
-            isScanning = false;
-            startButton.classList.remove("d-none");
-            stopButton.classList.add("d-none");
+
+            // Pilih kamera belakang (biasanya terakhir di list)
+            const selectedDeviceId = videoInputDevices.length > 1
+                ? videoInputDevices[videoInputDevices.length - 1].deviceId
+                : videoInputDevices[0].deviceId;
+
+            // Jalankan scanner realtime
+            codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
+                if (result) {
+                    serialInput.value = result.text;
+                    codeReader.reset(); // Hentikan kamera setelah terbaca
+                    alert("Nomor seri terbaca: " + result.text);
+                }
+            });
+        })
+        .catch(err => {
+            console.error("Gagal membuka kamera:", err);
+            videoElement.insertAdjacentHTML(
+                'afterend',
+                "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Silakan ketik SN manual.</p>"
+            );
         });
+});
+
+function submitSN() {
+    const sn = document.getElementById("serialNumber").value.trim();
+    if (!sn) {
+        alert("Nomor seri belum diisi.");
+        return;
     }
-
-    // Fungsi stop kamera
-    function stopCamera() {
-        if (reader && isScanning) {
-            reader.stop().then(() => {
-                console.log("Kamera dimatikan.");
-            }).catch(err => console.error(err));
-        }
-        isScanning = false;
-        startButton.classList.remove("d-none");
-        stopButton.classList.add("d-none");
-    }
-
-    // Tombol event
-    startButton.addEventListener("click", startCamera);
-    stopButton.addEventListener("click", stopCamera);
-
-    // Input manual via alat barcode USB
-    barcodeInput.addEventListener("change", function () {
-        if (this.value.trim() !== "") {
-            showResult(this.value.trim());
-            this.value = "";
-        }
-    });
+    alert("Nomor seri disimpan: " + sn);
+    // TODO: kirim ke controller Laravel via fetch('/tambahmodem', { method:'POST', body: JSON.stringify({ sn }) })
+}
 </script>
 
 </body>
