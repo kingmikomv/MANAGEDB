@@ -1,146 +1,130 @@
 <!DOCTYPE html>
-<html lang="en">
-<x-head />
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan QR / Barcode Modem</title>
 
-<body class="hold-transition dark-mode sidebar-mini layout-fixed layout-navbar-fixed layout-footer-fixed">
-<div class="wrapper">
-    <x-nav />
-    <x-sidebar :mikrotik="$mikrotik" :olt="$olt"/>
+    <!-- ZXing library -->
+    <script src="https://unpkg.com/@zxing/browser@0.1.3"></script>
+    <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
 
-    <div class="content-wrapper">
-        <section class="content">
-            <div class="container-fluid">
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="card-title">Tambah Modem</h5>
-                            </div>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f3f3;
+            padding: 15px;
+            text-align: center;
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px #999;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        #result {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h2>Scan QR / Barcode SN Modem</h2>
 
-                            <div class="card-body text-center">
-                                <p class="mb-3">Scan QR / Barcode modem untuk membaca SN</p>
+    <video id="video" autoplay></video>
 
-                                <!-- Area kamera -->
-                                <video id="preview" autoplay muted playsinline style="width:100%; max-width:400px; border-radius:10px; background:#000;"></video>
-
-                                <!-- Upload gambar QR -->
-                                <div class="mt-3">
-                                    <label class="form-label">Atau upload foto QR/Barcode:</label>
-                                    <input type="file" id="qrFile" accept="image/*" class="form-control" onchange="decodeImageFile(this)">
-                                </div>
-
-                                <!-- Input SN -->
-                                <div class="mt-4">
-                                    <label for="serialNumber">Nomor Seri (SN):</label>
-                                    <input type="text" id="serialNumber" name="serialNumber" class="form-control text-center" placeholder="Scan atau ketik manual">
-                                </div>
-
-                                <button class="btn btn-success mt-3" onclick="submitSN()">Simpan</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
+    <div>
+        <button class="btn" id="startScan">Mulai Scan</button>
+        <button class="btn" id="refocus">Refocus Kamera</button>
+        <label for="fileUpload" class="btn">Upload Gambar QR/Barcode</label>
+        <input type="file" id="fileUpload" accept="image/*">
     </div>
 
-    <x-footer />
-</div>
+    <div id="result">Menunggu hasil scan...</div>
 
-<x-script />
+    <form>
+        <input type="text" id="serial_number" name="serial_number" placeholder="SN otomatis muncul di sini" readonly style="margin-top:10px; padding:8px; width:80%; border-radius:8px; border:1px solid #ccc;">
+    </form>
 
-<!-- Library ZXing -->
-<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+    <script>
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        let selectedDeviceId = null;
 
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    const videoElement = document.getElementById('preview');
-    const serialInput = document.getElementById('serialNumber');
-    const codeReader = new ZXing.BrowserMultiFormatReader();
+        // Fungsi mulai kamera
+        async function startCamera() {
+            try {
+                const devices = await codeReader.listVideoInputDevices();
+                const backCamera = devices.find(device =>
+                    device.label.toLowerCase().includes('back')
+                ) || devices[0];
 
-    // 🔹 Mulai kamera & scan otomatis
-    codeReader
-        .listVideoInputDevices()
-        .then(videoInputDevices => {
-            if (videoInputDevices.length === 0) {
-                throw new Error("Tidak ada kamera yang terdeteksi");
-            }
+                selectedDeviceId = backCamera.deviceId;
 
-            const selectedDeviceId = videoInputDevices.length > 1
-                ? videoInputDevices[videoInputDevices.length - 1].deviceId
-                : videoInputDevices[0].deviceId;
-
-            // Jalankan scanner realtime
-            codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
-                if (result) {
-                    serialInput.value = result.text;
-                    codeReader.reset(); // stop kamera setelah berhasil
-                    alert("Nomor seri terbaca: " + result.text);
-                }
-            });
-        })
-        .catch(err => {
-            console.error("Gagal membuka kamera:", err);
-            videoElement.insertAdjacentHTML('afterend', "<p class='text-danger mt-2'>Kamera tidak bisa digunakan. Gunakan upload foto QR.</p>");
-        });
-});
-
-// 🔹 Fungsi baca QR dari file upload
-function decodeImageFile(input) {
-    if (input.files.length === 0) return;
-
-    const file = input.files[0];
-    const reader = new FileReader();
-    const serialInput = document.getElementById('serialNumber');
-    const codeReader = new ZXing.BrowserMultiFormatReader();
-
-    reader.onload = function() {
-        const img = new Image();
-        img.onload = function() {
-            codeReader.decodeFromImage(img)
-                .then(result => {
-                    serialInput.value = result.text;
-                    alert("Nomor seri terbaca: " + result.text);
-                })
-                .catch(() => {
-                    alert("Gagal membaca QR/barcode dari gambar.");
+                codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                    if (result) {
+                        document.getElementById('result').textContent = "SN: " + result.text;
+                        document.getElementById('serial_number').value = result.text;
+                        // Stop setelah berhasil
+                        codeReader.reset();
+                    }
                 });
-        };
-        img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-}
-
-// 🔹 Fungsi simpan ke backend Laravel
-function submitSN() {
-    const sn = document.getElementById("serialNumber").value.trim();
-    if (!sn) {
-        alert("Nomor seri belum diisi.");
-        return;
-    }
-
-    // Kirim ke backend Laravel via AJAX
-    fetch("", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-TOKEN": "{{ csrf_token() }}"
-        },
-        body: JSON.stringify({ sn })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            alert("Modem berhasil disimpan!");
-        } else {
-            alert("Gagal menyimpan modem: " + data.message);
+            } catch (error) {
+                console.error(error);
+                document.getElementById('result').textContent = "Kamera tidak tersedia atau izin ditolak.";
+            }
         }
-    })
-    .catch(err => {
-        alert("Terjadi kesalahan koneksi: " + err);
-    });
-}
-</script>
 
+        // Tombol mulai
+        document.getElementById('startScan').addEventListener('click', startCamera);
+
+        // Tombol refocus (restart kamera)
+        document.getElementById('refocus').addEventListener('click', () => {
+            codeReader.reset();
+            startCamera();
+        });
+
+        // Upload gambar QR/Barcode
+        document.getElementById('fileUpload').addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    img.onload = async () => {
+                        const result = await codeReader.decodeFromImage(img);
+                        if (result) {
+                            document.getElementById('result').textContent = "SN: " + result.text;
+                            document.getElementById('serial_number').value = result.text;
+                        } else {
+                            document.getElementById('result').textContent = "QR/Barcode tidak terbaca.";
+                        }
+                    };
+                } catch (err) {
+                    document.getElementById('result').textContent = "Gagal membaca gambar.";
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    </script>
 </body>
 </html>
