@@ -1,130 +1,156 @@
 <!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scan QR / Barcode Modem</title>
+<html lang="en">
+<x-head />
 
-    <!-- ZXing library -->
-    <script src="https://unpkg.com/@zxing/browser@0.1.3"></script>
-    <script src="https://unpkg.com/@zxing/library@0.20.0"></script>
+<body class="hold-transition dark-mode sidebar-mini layout-fixed layout-navbar-fixed layout-footer-fixed">
+<div class="wrapper">
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f3f3f3;
-            padding: 15px;
-            text-align: center;
-        }
-        video {
-            width: 100%;
-            max-width: 400px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px #999;
-        }
-        input[type="file"] {
-            display: none;
-        }
-        .btn {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin: 5px;
-            cursor: pointer;
-        }
-        .btn:hover {
-            background: #0056b3;
-        }
-        #result {
-            font-size: 18px;
-            font-weight: bold;
-            margin-top: 10px;
-            color: green;
-        }
-    </style>
-</head>
-<body>
-    <h2>Scan QR / Barcode SN Modem</h2>
+    <x-nav />
+    <x-sidebar :mikrotik="$mikrotik" :olt="$olt"/>
 
-    <video id="video" autoplay></video>
+    <div class="content-wrapper">
+        <x-cheader />
 
-    <div>
-        <button class="btn" id="startScan">Mulai Scan</button>
-        <button class="btn" id="refocus">Refocus Kamera</button>
-        <label for="fileUpload" class="btn">Upload Gambar QR/Barcode</label>
-        <input type="file" id="fileUpload" accept="image/*">
+        <section class="content">
+            <div class="container-fluid">
+                <div class="row justify-content-center">
+                    <div class="col-md-8">
+
+                        <div class="card shadow-sm">
+                            <div class="card-header text-center">
+                                <h5 class="card-title mb-0">📦 Tambah Modem</h5>
+                            </div>
+
+                            <div class="card-body">
+                                <form id="modemForm" onsubmit="event.preventDefault(); submitSN();">
+
+                                    <!-- Nomor Seri -->
+                                    <div class="form-group">
+                                        <label class="form-label">Nomor Seri (SN)</label>
+                                        <input type="text" id="serial_number" name="serial_number"
+                                               class="form-control text-center"
+                                               placeholder="Scan atau ketik SN di sini" autofocus>
+                                    </div>
+
+                                    <!-- Tanggal -->
+                                    <div class="form-group mt-3">
+                                        <label class="form-label">Tanggal</label>
+                                        <input type="text" id="lokasi" name="lokasi"
+                                               class="form-control text-center" readonly>
+                                    </div>
+
+                                    <!-- Tombol Upload -->
+                                    <button id="uploadBtn" class="btn btn-success btn-block mt-4" type="submit">
+                                        💾 Upload Data
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
-    <div id="result">Menunggu hasil scan...</div>
+    <x-footer />
+</div>
 
-    <form>
-        <input type="text" id="serial_number" name="serial_number" placeholder="SN otomatis muncul di sini" readonly style="margin-top:10px; padding:8px; width:80%; border-radius:8px; border:1px solid #ccc;">
-    </form>
+<x-script />
 
-    <script>
-        const codeReader = new ZXing.BrowserMultiFormatReader();
-        let selectedDeviceId = null;
+<!-- ✅ Tambahkan SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-        // Fungsi mulai kamera
-        async function startCamera() {
-            try {
-                const devices = await codeReader.listVideoInputDevices();
-                const backCamera = devices.find(device =>
-                    device.label.toLowerCase().includes('back')
-                ) || devices[0];
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const lokasiInput = document.getElementById('lokasi');
+    const snInput = document.getElementById('serial_number');
 
-                selectedDeviceId = backCamera.deviceId;
+    // Isi tanggal otomatis (hari ini)
+    lokasiInput.value = new Date().toISOString().split('T')[0];
+    snInput.focus();
 
-                codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
-                    if (result) {
-                        document.getElementById('result').textContent = "SN: " + result.text;
-                        document.getElementById('serial_number').value = result.text;
-                        // Stop setelah berhasil
-                        codeReader.reset();
-                    }
-                });
-            } catch (error) {
-                console.error(error);
-                document.getElementById('result').textContent = "Kamera tidak tersedia atau izin ditolak.";
-            }
+    // Jika user scan barcode dan scanner kirim ENTER → langsung kirim
+    snInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            submitSN();
+        }
+    });
+});
+
+async function submitSN() {
+    const sn = document.getElementById('serial_number').value.trim();
+    const lokasi = document.getElementById('lokasi').value.trim();
+    const btn = document.getElementById('uploadBtn');
+
+    if (!sn) {
+        Swal.fire({
+            icon: "warning",
+            title: "Nomor seri kosong!",
+            text: "Silakan isi atau scan nomor seri terlebih dahulu.",
+            confirmButtonColor: "#3085d6"
+        });
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = "⏳ Mengunggah...";
+
+    try {
+        const res = await fetch("{{ route('modem.store') }}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-TOKEN": "{{ csrf_token() }}"
+            },
+            body: JSON.stringify({ serial_number: sn, lokasi: lokasi })
+        });
+
+        const data = await res.json();
+
+        if (data.exists) {
+            Swal.fire({
+                icon: "error",
+                title: "Duplikat Data!",
+                text: "Nomor seri sudah terdaftar di database.",
+                confirmButtonColor: "#d33"
+            });
+        } else if (data.success) {
+            Swal.fire({
+                icon: "success",
+                title: "Berhasil!",
+                text: "Nomor seri berhasil disimpan.",
+                showConfirmButton: false,
+                timer: 2000
+            });
+        } else {
+            Swal.fire({
+                icon: "error",
+                title: "Gagal!",
+                text: "Terjadi kesalahan saat menyimpan data.",
+                confirmButtonColor: "#d33"
+            });
         }
 
-        // Tombol mulai
-        document.getElementById('startScan').addEventListener('click', startCamera);
+        // Kosongkan input & fokus ulang
+        document.getElementById('serial_number').value = '';
+        setTimeout(() => document.getElementById('serial_number').focus(), 200);
 
-        // Tombol refocus (restart kamera)
-        document.getElementById('refocus').addEventListener('click', () => {
-            codeReader.reset();
-            startCamera();
+    } catch (err) {
+        Swal.fire({
+            icon: "error",
+            title: "Gagal!",
+            text: "Tidak dapat terhubung ke server.",
+            confirmButtonColor: "#d33"
         });
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = "💾 Upload Data";
+    }
+}
+</script>
 
-        // Upload gambar QR/Barcode
-        document.getElementById('fileUpload').addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const img = new Image();
-                    img.src = e.target.result;
-                    img.onload = async () => {
-                        const result = await codeReader.decodeFromImage(img);
-                        if (result) {
-                            document.getElementById('result').textContent = "SN: " + result.text;
-                            document.getElementById('serial_number').value = result.text;
-                        } else {
-                            document.getElementById('result').textContent = "QR/Barcode tidak terbaca.";
-                        }
-                    };
-                } catch (err) {
-                    document.getElementById('result').textContent = "Gagal membaca gambar.";
-                }
-            };
-            reader.readAsDataURL(file);
-        });
-    </script>
 </body>
 </html>
