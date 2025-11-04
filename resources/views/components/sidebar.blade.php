@@ -84,7 +84,7 @@
     <a href="#" class="nav-link">
         <i class="nav-icon fas fa-microchip"></i>
         <p>
-            Alat
+           Stok Alat
             <i class="fas fa-angle-left right"></i>
         </p>
     </a>
@@ -93,14 +93,14 @@
         <li class="nav-item">
             <a href="{{ route('modem.tambahmodem') }}" class="nav-link" target="_blank">
                 <i class="far fa-circle nav-icon"></i>
-                <p>Tambah Alat</p>
+                <p>Tambah Stok</p>
             </a>
         </li>
 
         <li class="nav-item">
             <a href="{{ route('modem.index') }}" class="nav-link">
                 <i class="far fa-circle nav-icon"></i>
-                <p>Data Alat</p>
+                <p>Data Stok</p>
             </a>
         </li>
 
