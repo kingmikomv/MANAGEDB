@@ -23,7 +23,7 @@
                         <div class="card shadow-sm">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5 class="card-title mb-0">
-                                    🕓 History Pemasangan Modem
+                                    🕓 History Pemasangan Alat
                                 </h5>
                                
                             </div>

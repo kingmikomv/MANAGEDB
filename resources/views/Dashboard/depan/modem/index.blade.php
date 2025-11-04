@@ -18,7 +18,7 @@
 
                         <div class="card shadow-sm">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="card-title mb-0">📋 Data Modem</h5>
+                                <h5 class="card-title mb-0">📋 Data Alat</h5>
                             </div>
 
                             <div class="card-body">
@@ -61,23 +61,33 @@
                                                         </a>
                                                     </td>
                                                     <td>
-                                                        <div class="btn-group">
-                                                            @if($modem->status === 'terpasang')
-                                                                <button class="btn btn-warning btn-sm ml-2" onclick="tarikModem('{{ $modem->serial_number }}')">
-                                                                    🔄 Tarik
-                                                                </button>
-                                                            @elseif(in_array($modem->status, ['ditarik', 'belum digunakan', 'tersedia', null]))
-                                                                <button class="btn btn-success btn-sm ml-2" onclick="bukaModalPasang('{{ $modem->serial_number }}')">
-                                                                    ➕ Pelanggan Baru
-                                                                </button>
-                                                            @endif
+                                                        <!-- Tombol aksi jadi dropdown -->
+                                                        <div class="dropdown">
+                                                            <button class="btn btn-dark btn-sm dropdown-toggle" type="button" data-toggle="dropdown">
+                                                                ⚙️ Aksi
+                                                            </button>
+                                                            <div class="dropdown-menu dropdown-menu-right bg-dark border-0 shadow">
+                                                                @if($modem->status === 'terpasang')
+                                                                    <a class="dropdown-item text-warning" href="#" onclick="tarikModem('{{ $modem->serial_number }}')">
+                                                                        🔄 Tarik Modem
+                                                                    </a>
+                                                                @elseif(in_array($modem->status, ['ditarik', 'belum digunakan', 'tersedia', null]))
+                                                                    <a class="dropdown-item text-success" href="#" onclick="bukaModalPasang('{{ $modem->serial_number }}')">
+                                                                        ➕ Pasang Baru
+                                                                    </a>
+                                                                @endif
 
-                                                            {{-- Tombol update status --}}
-                                                            @if(!in_array($modem->status, ['rusak', 'return']))
-                                                                <button class="btn btn-secondary btn-sm ml-2" onclick="bukaModalStatus('{{ $modem->serial_number }}')">
-                                                                    ⚙️ Update Status
-                                                                </button>
-                                                            @endif
+                                                                @if(!in_array($modem->status, ['rusak', 'return']))
+                                                                    <a class="dropdown-item text-info" href="#" onclick="bukaModalStatus('{{ $modem->serial_number }}')">
+                                                                        ⚙️ Update Status
+                                                                    </a>
+                                                                @endif
+
+                                                                <div class="dropdown-divider bg-secondary"></div>
+                                                                <a class="dropdown-item text-danger" href="#" onclick="hapusModem('{{ $modem->serial_number }}')">
+                                                                    🗑️ Hapus Modem
+                                                                </a>
+                                                            </div>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -183,109 +193,87 @@ $(document).ready(function() {
     });
 });
 
-// Buka modal pasang
 function bukaModalPasang(serial) {
     $('#serial_number').val(serial);
     $('#modalPasang').modal('show');
 }
 
-// Buka modal status
 function bukaModalStatus(serial) {
     $('#serial_status').val(serial);
     $('#modalStatus').modal('show');
 }
 
-// Simpan data pelanggan baru
 $('#formPasang').on('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
-
     fetch("{{ route('modem.storePasang') }}", {
         method: "POST",
-        headers: {
-            "X-CSRF-TOKEN": "{{ csrf_token() }}"
-        },
+        headers: { "X-CSRF-TOKEN": "{{ csrf_token() }}" },
         body: formData
     })
     .then(res => res.json())
     .then(data => {
-        if (data.success) {
-            Swal.fire('Berhasil!', data.message, 'success').then(() => {
-                $('#modalPasang').modal('hide');
-                location.reload();
-            });
-        } else {
-            Swal.fire('Gagal!', data.message, 'error');
-        }
+        Swal.fire(data.success ? 'Berhasil!' : 'Gagal!', data.message, data.success ? 'success' : 'error')
+            .then(() => { if (data.success) location.reload(); });
     })
-    .catch(err => {
-        Swal.fire('Error!', 'Terjadi kesalahan sistem.', 'error');
-        console.error(err);
-    });
+    .catch(() => Swal.fire('Error!', 'Terjadi kesalahan sistem.', 'error'));
 });
 
-// Update status modem
 $('#formStatus').on('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
-
     fetch("{{ route('modem.updateStatus') }}", {
         method: "POST",
-        headers: {
-            "X-CSRF-TOKEN": "{{ csrf_token() }}"
-        },
+        headers: { "X-CSRF-TOKEN": "{{ csrf_token() }}" },
         body: formData
     })
     .then(res => res.json())
     .then(data => {
-        if (data.success) {
-            Swal.fire('Berhasil!', data.message, 'success').then(() => {
-                $('#modalStatus').modal('hide');
-                location.reload();
-            });
-        } else {
-            Swal.fire('Gagal!', data.message, 'error');
-        }
+        Swal.fire(data.success ? 'Berhasil!' : 'Gagal!', data.message, data.success ? 'success' : 'error')
+            .then(() => { if (data.success) location.reload(); });
     })
-    .catch(err => {
-        Swal.fire('Error!', 'Terjadi kesalahan sistem.', 'error');
-        console.error(err);
-    });
+    .catch(() => Swal.fire('Error!', 'Terjadi kesalahan sistem.', 'error'));
 });
 
-// Tarik modem
-function tarikModem(serial_number) {
+function tarikModem(serial) {
     Swal.fire({
         title: 'Yakin ingin menarik modem ini?',
         text: "Status modem akan diubah menjadi 'Ditarik'.",
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Ya, tarik!'
-    }).then((result) => {
-        if (result.isConfirmed) {
+        confirmButtonText: 'Ya, tarik!',
+        cancelButtonText: 'Batal'
+    }).then((r) => {
+        if (r.isConfirmed) {
             fetch("{{ route('modem.tarik') }}", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRF-TOKEN": "{{ csrf_token() }}"
-                },
-                body: JSON.stringify({ serial_number: serial_number })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire('Berhasil!', data.message, 'success').then(() => {
-                        location.reload();
-                    });
-                } else {
-                    Swal.fire('Gagal!', data.message, 'error');
-                }
-            })
-            .catch(err => {
-                Swal.fire('Error!', 'Terjadi kesalahan sistem.', 'error');
-                console.error(err);
+                headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": "{{ csrf_token() }}" },
+                body: JSON.stringify({ serial_number: serial })
+            }).then(res => res.json()).then(data => {
+                Swal.fire(data.success ? 'Berhasil!' : 'Gagal!', data.message, data.success ? 'success' : 'error')
+                    .then(() => { if (data.success) location.reload(); });
+            });
+        }
+    });
+}
+
+function hapusModem(serial) {
+    Swal.fire({
+        title: 'Apakah Anda yakin?',
+        text: "Data modem ini akan dihapus permanen!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, hapus!',
+        cancelButtonText: 'Batal'
+    }).then((r) => {
+        if (r.isConfirmed) {
+            fetch("{{ route('modem.destroy') }}", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": "{{ csrf_token() }}" },
+                body: JSON.stringify({ serial_number: serial })
+            }).then(res => res.json()).then(data => {
+                Swal.fire(data.success ? 'Dihapus!' : 'Gagal!', data.message, data.success ? 'success' : 'error')
+                    .then(() => { if (data.success) location.reload(); });
             });
         }
     });

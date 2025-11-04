@@ -82,9 +82,9 @@
 
                <li class="nav-item has-treeview">
     <a href="#" class="nav-link">
-        <i class="nav-icon fas fa-clone"></i>
+        <i class="nav-icon fas fa-microchip"></i>
         <p>
-            Modem
+            Alat
             <i class="fas fa-angle-left right"></i>
         </p>
     </a>
@@ -93,14 +93,14 @@
         <li class="nav-item">
             <a href="{{ route('modem.tambahmodem') }}" class="nav-link" target="_blank">
                 <i class="far fa-circle nav-icon"></i>
-                <p>Tambah Modem</p>
+                <p>Tambah Alat</p>
             </a>
         </li>
 
         <li class="nav-item">
             <a href="{{ route('modem.index') }}" class="nav-link">
                 <i class="far fa-circle nav-icon"></i>
-                <p>Data Modem</p>
+                <p>Data Alat</p>
             </a>
         </li>
 

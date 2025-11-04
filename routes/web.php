@@ -66,7 +66,8 @@ Route::prefix('/home/modem')
         Route::get('/history/{serial_number}', 'history')->name('modem.history');
         Route::get('/pasang/{serial_number}', [ModemController::class, 'pasangModem'])->name('modem.pasang');
         Route::post('/pasang/ok', [ModemController::class, 'storePasang'])->name('modem.storePasang');
-        Route::post('//update-status', [ModemController::class, 'updateStatus'])->name('modem.updateStatus');
+        Route::post('/update-status', [ModemController::class, 'updateStatus'])->name('modem.updateStatus');
+        Route::delete('/hapus', [ModemController::class, 'destroy'])->name('modem.destroy');
 
     });
 
