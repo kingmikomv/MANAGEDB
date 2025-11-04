@@ -9,7 +9,7 @@ return new class extends Migration {
         Schema::create('modems', function (Blueprint $table) {
             $table->id();
             $table->string('serial_number')->unique();
-            $table->enum('status', ['tersedia', 'terpasang', 'ditarik'])->default('tersedia');
+            $table->enum('status', ['tersedia', 'terpasang', 'ditarik', 'rusak', 'return'])->default('tersedia');
             $table->string('pelanggan_aktif')->nullable();
             $table->timestamps();
         });

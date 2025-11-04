@@ -22,7 +22,6 @@
                             </div>
 
                             <div class="card-body">
-                                
                                 <div class="table-responsive">
                                     <table id="modemTable" class="table table-bordered table-hover table-striped text-center">
                                         <thead class="thead-dark">
@@ -46,27 +45,37 @@
                                                             <span class="badge badge-success">Terpasang</span>
                                                         @elseif($modem->status === 'ditarik')
                                                             <span class="badge badge-danger">Ditarik</span>
+                                                        @elseif($modem->status === 'rusak')
+                                                            <span class="badge badge-warning">Rusak</span>
+                                                        @elseif($modem->status === 'return')
+                                                            <span class="badge badge-info">Return ke Toko</span>
                                                         @else
                                                             <span class="badge badge-secondary">Belum digunakan</span>
                                                         @endif
                                                     </td>
                                                     <td>{{ $modem->pelanggan_aktif ?? '-' }}</td>
                                                     <td>{{ $modem->updated_at ? $modem->updated_at->format('Y-m-d H:i') : '-' }}</td>
-                                                    <td> <a href="{{ route('modem.history', $modem->id) }}" class="btn btn-info btn-sm">
-                                                                🕓 History
-                                                            </a></td>
+                                                    <td>
+                                                        <a href="{{ route('modem.history', $modem->id) }}" class="btn btn-info btn-sm">
+                                                            🕓 History
+                                                        </a>
+                                                    </td>
                                                     <td>
                                                         <div class="btn-group">
-                                                           
-
                                                             @if($modem->status === 'terpasang')
                                                                 <button class="btn btn-warning btn-sm ml-2" onclick="tarikModem('{{ $modem->serial_number }}')">
                                                                     🔄 Tarik
                                                                 </button>
                                                             @elseif(in_array($modem->status, ['ditarik', 'belum digunakan', 'tersedia', null]))
-                                                                <button class="btn btn-success btn-sm ml-2" 
-                                                                    onclick="bukaModalPasang('{{ $modem->serial_number }}')">
+                                                                <button class="btn btn-success btn-sm ml-2" onclick="bukaModalPasang('{{ $modem->serial_number }}')">
                                                                     ➕ Pelanggan Baru
+                                                                </button>
+                                                            @endif
+
+                                                            {{-- Tombol update status --}}
+                                                            @if(!in_array($modem->status, ['rusak', 'return']))
+                                                                <button class="btn btn-secondary btn-sm ml-2" onclick="bukaModalStatus('{{ $modem->serial_number }}')">
+                                                                    ⚙️ Update Status
                                                                 </button>
                                                             @endif
                                                         </div>
@@ -125,6 +134,44 @@
   </div>
 </div>
 
+{{-- ========================== --}}
+{{-- MODAL UPDATE STATUS --}}
+{{-- ========================== --}}
+<div class="modal fade" id="modalStatus" tabindex="-1" aria-labelledby="modalStatusLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header">
+        <h5 class="modal-title">⚙️ Update Status Modem</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <form id="formStatus">
+        @csrf
+        <div class="modal-body">
+          <input type="hidden" id="serial_status" name="serial_number">
+          <div class="form-group">
+            <label>Pilih Status Baru</label>
+            <select name="status" class="form-control" required>
+              <option value="">-- Pilih Status --</option>
+              <option value="rusak">Rusak</option>
+              <option value="return">Return ke Toko</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Keterangan</label>
+            <textarea class="form-control" name="keterangan" rows="3" placeholder="Opsional"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-primary">💾 Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <x-script />
 
 <script>
@@ -140,6 +187,12 @@ $(document).ready(function() {
 function bukaModalPasang(serial) {
     $('#serial_number').val(serial);
     $('#modalPasang').modal('show');
+}
+
+// Buka modal status
+function bukaModalStatus(serial) {
+    $('#serial_status').val(serial);
+    $('#modalStatus').modal('show');
 }
 
 // Simpan data pelanggan baru
@@ -159,6 +212,35 @@ $('#formPasang').on('submit', function(e) {
         if (data.success) {
             Swal.fire('Berhasil!', data.message, 'success').then(() => {
                 $('#modalPasang').modal('hide');
+                location.reload();
+            });
+        } else {
+            Swal.fire('Gagal!', data.message, 'error');
+        }
+    })
+    .catch(err => {
+        Swal.fire('Error!', 'Terjadi kesalahan sistem.', 'error');
+        console.error(err);
+    });
+});
+
+// Update status modem
+$('#formStatus').on('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+
+    fetch("{{ route('modem.updateStatus') }}", {
+        method: "POST",
+        headers: {
+            "X-CSRF-TOKEN": "{{ csrf_token() }}"
+        },
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire('Berhasil!', data.message, 'success').then(() => {
+                $('#modalStatus').modal('hide');
                 location.reload();
             });
         } else {

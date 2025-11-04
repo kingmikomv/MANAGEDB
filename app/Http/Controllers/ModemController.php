@@ -128,6 +128,57 @@ public function storePasang(Request $request)
             'message' => 'Gagal memasang modem: ' . $e->getMessage(),
         ]);
     }
+
+    
+}
+
+public function updateStatus(Request $request)
+{
+    try {
+        $request->validate([
+            'serial_number' => 'required|string|exists:modems,serial_number',
+            'status' => 'required|string|in:rusak,return',
+            'keterangan' => 'nullable|string|max:255'
+        ]);
+
+        // Ambil modem berdasarkan serial number
+        $modem = \App\Models\Modem::where('serial_number', $request->serial_number)->first();
+
+        if (!$modem) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Modem tidak ditemukan.'
+            ]);
+        }
+
+        // Simpan status lama untuk histori
+        $statusLama = $modem->status;
+
+        // Update status modem
+        $modem->update([
+            'status' => $request->status,
+            'pelanggan_aktif' => null, // kosongkan karena tidak sedang terpasang
+        ]);
+
+        // Catat ke tabel modem_histories
+        \App\Models\ModemHistory::create([
+            'modem_id' => $modem->id,
+            'pelanggan' => $modem->pelanggan_aktif ?? '-',
+            'tanggal_tarik' => now(),
+            'keterangan' => "Status diubah dari '{$statusLama}' menjadi '{$request->status}'" 
+                . ($request->keterangan ? " ({$request->keterangan})" : ''),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Status modem berhasil diperbarui menjadi: ' . ucfirst($request->status)
+        ]);
+    } catch (\Throwable $th) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Terjadi kesalahan: ' . $th->getMessage()
+        ]);
+    }
 }
 
 
