@@ -19,7 +19,7 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
-Auth::routes(['register' => true]);
+Auth::routes(['register' => false]);
 
 Route::prefix('home')->group(function () {
 
